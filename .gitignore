@@ -1,0 +1,33 @@
+# --- General ---
+*.log
+*.pyc
+*.pyo
+__pycache__/
+.env
+.env.*
+
+# --- Python / Django ---
+venv/
+*.sqlite3
+db.sqlite3
+*.py[cod]
+migrations/**/__pycache__/
+**/migrations/*.pyc
+media/
+staticfiles/
+.DS_Store
+
+# --- VSCode / PyCharm ---
+.vscode/
+.idea/
+
+# --- Node / React (Vite) ---
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.env
+frontend/.env.*
+
+# --- OS-specific ---
+Thumbs.db
+.DS_Store
