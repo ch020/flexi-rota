@@ -27,7 +27,7 @@ jobs:
     - name: Generate schema.yaml
       run: |
         cd backend
-        python manage.py spectacular --file ../docs/schema.yaml
+        python manage.py spectacular --file /docs/schema.yaml
 
     - name: Commit schema.yaml
       run: |
