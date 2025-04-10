@@ -45,13 +45,9 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
 
 class AvailabilitySerializer(serializers.ModelSerializer):
-    @extend_schema_field(OpenApiTypes.STR)
-    def get_user_display(self, obj):
-        return obj.user.username
-
     class Meta:
         model = Availability
-        fields = '__all__'
+        exclude = ['user']
 
     def validate(self, data):
         start = data.get('start_time')
