@@ -109,7 +109,6 @@ npm run dev
 backend/
 ├── backend/            # Django settings
 ├── rota/               # App: models, views, serializers
-├── docs/               # Optional: Swagger static UI
 ├── manage.py
 └── requirements.txt
 ```
