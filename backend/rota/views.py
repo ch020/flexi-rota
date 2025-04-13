@@ -216,7 +216,7 @@ def get_unread_notifications(request):
     summary="Send a notification to one or more users",
     request=SendNotificationSerializer,
     responses={
-        201: OpenApiParameter(type='object', description='Confirmation Message'),
+        201: OpenApiResponse(description='Confirmation Message'),
     }
 )
 @api_view(['POST'])
@@ -243,10 +243,10 @@ def send_notification(request):
 
 @extend_schema(
     summary="Mark a specific notification as read",
-    parameters=[OpenApiParameter("pk", int, OpenApiParameter.PATH)],
+    parameters=[OpenApiParameter("pk", int, OpenApiParameter.PATH, required=True, description="ID of the notification to mark as read")],
     responses={
-        200: OpenApiParameter(type='object', description='Read confirmation'),
-        404: OpenApiParameter(type='object', description='Notification not found or not assigned')
+        200: OpenApiResponse(description='Read confirmation'),
+        404: OpenApiResponse(description='Notification not found or not assigned')
     }
 )
 @api_view(['POST'])
