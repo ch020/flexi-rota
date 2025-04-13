@@ -1,5 +1,6 @@
 import secrets
 from datetime import timedelta
+from typing import cast
 
 from django.core.exceptions import PermissionDenied
 from django.utils import timezone
@@ -14,8 +15,9 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 from drf_spectacular.types import OpenApiTypes
 
-from .models import User, Availability, InviteToken
-from .serializers import UserSerializer, AvailabilitySerializer, RegisterSerializer
+from .models import User, Availability, InviteToken, Shift
+from .serializers import UserSerializer, AvailabilitySerializer, RegisterSerializer, ShiftSerializer
+
 
 # Create your views here.
 @extend_schema(
@@ -62,6 +64,7 @@ class AvailabilityViewSet(viewsets.ModelViewSet):
         if user.role != 'manager' and obj.user != user:
             raise PermissionDenied("You do not have permission to access this object.")
         return obj
+
 
 @extend_schema(
     summary="Register a new user",
@@ -146,3 +149,49 @@ def generate_invite(request):
 
     invite_url = settings.BACKEND_URL + f"register/?invite={token}"
     return Response({"invite_url": invite_url})
+
+#SHIFT CLASSES
+@extend_schema(
+    summary="CRUD operations on shifts",
+    description="Create, retrieve, update, and delete shifts.\n\n- Regular users: can only see and manage their own shifts.\n- Managers: can see and manage all shift entries within their organisation.",
+    request=ShiftSerializer,
+    responses={
+        200: ShiftSerializer(many=True),
+        201: ShiftSerializer,
+        400: OpenApiResponse(description='Invalid input'),
+        403: OpenApiResponse(description='Not authenticated'),
+        401: OpenApiResponse(description='Unauthorized'),
+    }
+)
+class ShiftViewSet(viewsets.ModelViewSet):
+    serializer_class = ShiftSerializer
+    permission_classes = [IsAuthenticated]
+    queryset = Shift.objects.all()
+
+    def get_queryset(self):
+        user = cast(User, self.request.user)
+
+        if user.role == "manager":
+            return Shift.objects.filter(manager=user)
+        else:
+            return Shift.objects.filter(employee=user)
+
+    def perform_create(self, serializer):
+        user = cast(User, self.request.user)
+
+        if user.role != "manager":
+            raise PermissionDenied("Only managers can create shifts")
+
+        serializer.save(manager=user)
+
+    def get_object(self):
+        obj = super().get_object()
+        user = cast(User, self.request.user)
+
+        if user.role != 'manager' and obj.employee != user:
+            raise PermissionDenied("You do not have permission to access this shift.")
+
+        if user.role == 'manager' and obj.manager != user:
+            raise PermissionDenied("You do not manage this shift.")
+
+        return obj

@@ -2,7 +2,7 @@ from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
-from .models import User, Availability, InviteToken
+from .models import User, Availability, InviteToken, Shift
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
 
@@ -48,6 +48,20 @@ class AvailabilitySerializer(serializers.ModelSerializer):
     class Meta:
         model = Availability
         exclude = ['user']
+
+    def validate(self, data):
+        start = data.get('start_time')
+        end = data.get('end_time')
+
+        if start and end and end <= start:
+            raise serializers.ValidationError("Start time must be before end time.")
+
+        return data
+
+class ShiftSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Shift
+        exclude = []
 
     def validate(self, data):
         start = data.get('start_time')

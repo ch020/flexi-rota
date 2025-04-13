@@ -40,3 +40,12 @@ class Availability(models.Model):
 
     def __str__(self):
         return f"{self.user.username} unavailable from {self.start_time} to {self.end_time}"
+
+class Shift(models.Model):
+    employee = models.ForeignKey(User, on_delete=models.CASCADE, related_name='employee')
+    manager = models.ForeignKey(User, on_delete=models.CASCADE, related_name='manager')
+    start_time = models.DateTimeField(default=timezone.now)
+    end_time = models.DateTimeField(default=default_end_time)
+
+    def __str__(self):
+        return f"{self.employee.username}'s shift starts at {self.start_time} to {self.end_time} and is managed by {self.manager.username}"

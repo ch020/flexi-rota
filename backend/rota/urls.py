@@ -1,11 +1,13 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
-from .views import UserViewSet, AvailabilityViewSet, test_api_noauth, test_api_auth, RegisterView, logout_view, generate_invite
+from .views import UserViewSet, AvailabilityViewSet, test_api_noauth, test_api_auth, RegisterView, logout_view, \
+    generate_invite, ShiftViewSet
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 router = DefaultRouter()
 router.register(r'users', UserViewSet)
 router.register(r'availability', AvailabilityViewSet)
+router.register(r'shift', ShiftViewSet)
 
 urlpatterns = [
     path('testnoauth/', test_api_noauth),
