@@ -49,3 +49,20 @@ class Shift(models.Model):
 
     def __str__(self):
         return f"{self.employee.username}'s shift starts at {self.start_time} to {self.end_time} and is managed by {self.manager.username}"
+
+class Notification(models.Model):
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    recipients = models.ManyToManyField(User, through='NotificationReadStatus', related_name='notifications')
+
+    def __str__(self):
+        return self.message[:50]
+
+class NotificationReadStatus(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    notification = models.ForeignKey(Notification, on_delete=models.CASCADE)
+    read = models.BooleanField(default=False)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ('user', 'notification')

@@ -12,11 +12,12 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from drf_spectacular.utils import extend_schema, OpenApiResponse
+from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 
-from .models import User, Availability, InviteToken, Shift
-from .serializers import UserSerializer, AvailabilitySerializer, RegisterSerializer, ShiftSerializer
+from .models import User, Availability, InviteToken, Shift, Notification, NotificationReadStatus
+from .serializers import UserSerializer, AvailabilitySerializer, RegisterSerializer, ShiftSerializer, \
+    NotificationSerializer, SendNotificationSerializer
 
 
 # Create your views here.
@@ -195,3 +196,67 @@ class ShiftViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("You do not manage this shift.")
 
         return obj
+
+@extend_schema(
+    summary="Retrieve unread notifications",
+    responses=NotificationSerializer(many=True)
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_unread_notifications(request):
+    user = request.user
+    unread_notifications = Notification.objects.filter(
+        recipients=user,
+        notificationreadstatus__read=False
+    )
+    serializer = NotificationSerializer(unread_notifications, many=True, context={'request': request})
+    return Response(serializer.data)
+
+@extend_schema(
+    summary="Send a notification to one or more users",
+    request=SendNotificationSerializer,
+    responses={
+        201: OpenApiParameter(type='object', description='Confirmation Message'),
+    }
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def send_notification(request):
+    if request.user.role != 'manager':
+        return Response({"detail": "Only managers can send notifications."}, status=403)
+
+    serializer = SendNotificationSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+
+    notification = Notification.objects.create(message=data['message'])
+
+    if not data['recipients']:
+        users = User.objects.all()
+    else:
+        users = User.objects.filter(id__in=data['recipients'])
+
+    for user in users:
+        NotificationReadStatus.objects.create(notification=notification, user=user)
+
+    return Response({"detail": "Notification sent."}, status=201)
+
+@extend_schema(
+    summary="Mark a specific notification as read",
+    parameters=[OpenApiParameter("pk", int, OpenApiParameter.PATH)],
+    responses={
+        200: OpenApiParameter(type='object', description='Read confirmation'),
+        404: OpenApiParameter(type='object', description='Notification not found or not assigned')
+    }
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mark_notification_read(request, pk):
+    try:
+        read_status = NotificationReadStatus.objects.get(user=request.user, notification_id=pk)
+        read_status.read = True
+        read_status.read_at = timezone.now()
+        read_status.save()
+        return Response({"detail": "Marked as read."})
+    except NotificationReadStatus.DoesNotExist:
+        return Response({"detail": "Notification not found or not assigned."}, status=404)

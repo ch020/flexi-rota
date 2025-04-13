@@ -1,7 +1,6 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
-from .views import UserViewSet, AvailabilityViewSet, test_api_noauth, test_api_auth, RegisterView, logout_view, \
-    generate_invite, ShiftViewSet
+from .views import *
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 router = DefaultRouter()
@@ -17,5 +16,8 @@ urlpatterns = [
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('logout/', logout_view, name='auth_logout'),
     path('generate-invite/', generate_invite, name='generate_invite'),
+    path('notifications/', get_unread_notifications, name='get_unread_notifications'),
+    path('notifications/send/', send_notification, name='send_notification'),
+    path('notifications/<int:pk>/read/', mark_notification_read, name='mark_notification_read'),
     path('', include(router.urls)),
 ]

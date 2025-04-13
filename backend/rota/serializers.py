@@ -1,10 +1,10 @@
-from django.utils import timezone
-from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import extend_schema_field
-from rest_framework import serializers
-from .models import User, Availability, InviteToken, Shift
 from django.contrib.auth.password_validation import validate_password
+from django.utils import timezone
+from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
+
+from .models import User, Availability, InviteToken, Shift, Notification, NotificationReadStatus
+
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -71,3 +71,21 @@ class ShiftSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Start time must be before end time.")
 
         return data
+
+class NotificationSerializer(serializers.ModelSerializer):
+    read = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Notification
+        fields = ['id', 'message', 'created_at', 'read']
+
+    def get_read(self, obj):
+        user = self.context['request'].user
+        return NotificationReadStatus.objects.filter(user=user, notification=obj, read=True).exists()
+
+class SendNotificationSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    recipients = serializers.ListField(
+        child=serializers.IntegerField(),
+        allow_empty=True
+    )
