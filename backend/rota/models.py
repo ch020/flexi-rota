@@ -32,7 +32,7 @@ class User(AbstractUser):
         ('employee', 'Employee'),
     )
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
-    phone_number = models.CharField(max_length=15, blank=True, validators=[
+    phone_number = models.CharField(max_length=15, blank=True, null=True, validators=[
         RegexValidator(
             regex=r'^\+?44\d{10}$',
             message='Enter a valid UK phone number starting with +44 and 10 digits.'
