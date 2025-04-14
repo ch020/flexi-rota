@@ -408,9 +408,41 @@ def get_pending_swaps(request):
     summary="Approve a shift swap request",
     parameters=[OpenApiParameter(name="id", type=int, location=OpenApiParameter.PATH)],
     responses={
-        200: OpenApiResponse(description="Approval registered"),
-        403: OpenApiResponse(description="Only the manager or proposed user can approve"),
-        404: OpenApiResponse(description="Swap request not found")
+        200: OpenApiResponse(
+            description="Approval registered",
+            examples=[
+                OpenApiExample(
+                    "Manager or Recipient Approved",
+                    value={"detail": "Approval recorded. Waiting for the other party."},
+                    response_only=True
+                ),
+                OpenApiExample(
+                    "Swap Fully Approved",
+                    value={"detail": "Swap fully approved and completed."},
+                    response_only=True
+                )
+            ]
+        ),
+        403: OpenApiResponse(
+            description="Permission denied",
+            examples=[
+                OpenApiExample(
+                    "Not Allowed",
+                    value={"detail": "Only the shift manager or proposed user can approve this swap."},
+                    response_only=True
+                )
+            ]
+        ),
+        404: OpenApiResponse(
+            description="Swap request not found",
+            examples=[
+                OpenApiExample(
+                    "Invalid ID",
+                    value={"detail": "Swap request not found."},
+                    response_only=True
+                )
+            ]
+        )
     },
     tags=["Shifts"]
 )
@@ -449,9 +481,36 @@ def approve_swap(request, id):
     summary="Reject a shift swap request",
     parameters=[OpenApiParameter(name="id", type=int, location=OpenApiParameter.PATH)],
     responses={
-        200: OpenApiResponse(description="Swap request rejected"),
-        403: OpenApiResponse(description="Only the manager or recipient can reject"),
-        404: OpenApiResponse(description="Swap request not found")
+        200: OpenApiResponse(
+            description="Swap request rejected",
+            examples=[
+                OpenApiExample(
+                    "Rejected",
+                    value={"detail": "Swap request has been rejected."},
+                    response_only=True
+                )
+            ]
+        ),
+        403: OpenApiResponse(
+            description="Permission denied",
+            examples=[
+                OpenApiExample(
+                    "Not Allowed",
+                    value={"detail": "Only the manager or recipient can reject this request."},
+                    response_only=True
+                )
+            ]
+        ),
+        404: OpenApiResponse(
+            description="Swap request not found",
+            examples=[
+                OpenApiExample(
+                    "Invalid ID",
+                    value={"detail": "Swap request not found."},
+                    response_only=True
+                )
+            ]
+        )
     },
     tags=["Shifts"]
 )
