@@ -1,24 +1,28 @@
 from django.contrib.auth.password_validation import validate_password
-from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
-from .models import User, Availability, InviteToken, Shift, Notification, NotificationReadStatus
+from .models import *
 
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ('id', 'username', 'email', 'role', 'name', 'phone_number', 'pay_rate')
+        fields = ('id', 'username', 'email', 'role', 'first_name', 'last_name', 'phone_number', 'pay_rate')
+
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        rep['full_name'] = f"{instance.first_name} {instance.last_name}"
+        return rep
 
 class RegisterSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=True, validators=[UniqueValidator(queryset=User.objects.all())])
     password = serializers.CharField(required=True, write_only=True, validators=[validate_password])
-    password2 = serializers.CharField(write_only=True, required=True)
+    password2 = serializers.CharField(style={'input_type': 'password'}, write_only=True, required=True)
 
     class Meta:
         model = User
-        fields = ('username', 'email', 'password', 'password2', 'role', 'name', 'phone_number', 'pay_rate')
+        fields = ('username', 'email', 'password', 'password2', 'role', 'first_name', 'last_name', 'phone_number', 'pay_rate')
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
@@ -89,3 +93,42 @@ class SendNotificationSerializer(serializers.Serializer):
         child=serializers.IntegerField(),
         allow_empty=True
     )
+
+    class Meta:
+        ref_name = "SendNotificationSerializer"
+
+class PayEstimateSerializer(serializers.Serializer):
+    this_month = serializers.DecimalField(max_digits=10, decimal_places=2)
+    last_month = serializers.DecimalField(max_digits=10, decimal_places=2)
+
+    class Meta:
+        ref_name = "PayEstimateSerializer"
+
+class ShiftSwapRequestSerializer(serializers.ModelSerializer):
+    shift = serializers.PrimaryKeyRelatedField(queryset=Shift.objects.all())
+    requested_by = serializers.StringRelatedField()
+    requested_to = serializers.StringRelatedField()
+    manager_approved = serializers.BooleanField(read_only=True)
+    recipient_approved = serializers.BooleanField(read_only=True)
+    is_approved = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = ShiftSwapRequest
+        fields = [
+            'id',
+            'shift',
+            'requested_by',
+            'requested_to',
+            'is_approved',
+            'manager_approved',
+            'recipient_approved',
+            'requested_at',
+            'approved_at'
+        ]
+        read_only_fields = [
+            'is_approved',
+            'manager_approved',
+            'recipient_approved',
+            'requested_at',
+            'approved_at'
+        ]

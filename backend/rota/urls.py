@@ -19,5 +19,10 @@ urlpatterns = [
     path('notifications/', get_unread_notifications, name='get_unread_notifications'),
     path('notifications/send/', send_notification, name='send_notification'),
     path('notifications/<int:pk>/read/', mark_notification_read, name='mark_notification_read'),
+    path('pay-estimate/', pay_estimate, name='pay_estimate'),
+    path('swaps/request/', request_swap, name='request_swap'),
+    path('swaps/pending/', get_pending_swaps, name='get_pending_swaps'),
+    path('swaps/approve/<int:id>/', approve_swap, name='approve_swap'),
+    path('swaps/reject/<int:id>/', reject_swap, name='reject_swap'),
     path('', include(router.urls)),
 ]

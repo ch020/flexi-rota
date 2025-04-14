@@ -1,5 +1,6 @@
 import secrets
-from datetime import timedelta
+from datetime import timedelta, datetime
+from calendar import monthrange
 from typing import cast
 
 from django.core.exceptions import PermissionDenied
@@ -15,16 +16,16 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 
-from .models import User, Availability, InviteToken, Shift, Notification, NotificationReadStatus
-from .serializers import UserSerializer, AvailabilitySerializer, RegisterSerializer, ShiftSerializer, \
-    NotificationSerializer, SendNotificationSerializer
+from .models import *
+from .serializers import *
 
 
 # Create your views here.
 @extend_schema(
     summary="List all users",
     description="Returns a list of all registered users. Requires authentication.",
-    responses={200: UserSerializer(many=True)}
+    responses={200: UserSerializer(many=True)},
+    tags=["Users"]
 )
 class UserViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = User.objects.all()
@@ -39,9 +40,10 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
         200: AvailabilitySerializer(many=True),
         201: AvailabilitySerializer,
         400: OpenApiResponse(description='Invalid input'),
-        403: OpenApiResponse(description='Not authenticated'),
-        401: OpenApiResponse(description='Unauthorized'),
-    }
+        401: OpenApiResponse(description='Not authenticated'),
+        403: OpenApiResponse(description='Unauthorized'),
+    },
+    tags=["Availabilities"]
 )
 class AvailabilityViewSet(viewsets.ModelViewSet):
     serializer_class = AvailabilitySerializer
@@ -74,7 +76,8 @@ class AvailabilityViewSet(viewsets.ModelViewSet):
     responses={
         201: UserSerializer,
         400: OpenApiResponse(description='Passwords did not match or input was invalid')
-    }
+    },
+    tags=["Users"]
 )
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
@@ -86,7 +89,8 @@ class RegisterView(generics.CreateAPIView):
 @extend_schema(
     summary="Test GET request (no authentication required)",
     description="Returns a simple success message to confirm the API is running.",
-    responses={200: OpenApiTypes.OBJECT}
+    responses={200: OpenApiTypes.OBJECT},
+    tags=["Tests"]
 )
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -96,7 +100,8 @@ def test_api_noauth(request):
 @extend_schema(
     summary="Test GET request (requires authentication)",
     description="Returns a personalized message for the authenticated user.",
-    responses={200: OpenApiTypes.OBJECT, 401: OpenApiResponse(description="Unauthorized")}
+    responses={200: OpenApiTypes.OBJECT, 401: OpenApiResponse(description="Unauthorized")},
+    tags=["Tests"]
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -107,11 +112,18 @@ def test_api_auth(request):
 @extend_schema(
     summary="Logout user",
     description="Blacklists the provided refresh token, effectively logging out the user.\n\n**Required field:** `refresh` (string).",
-    request=OpenApiTypes.OBJECT,
+    request={
+        "type": "object",
+        "properties": {
+            "refresh": {"type": "string", "example": "your-refresh-token"}
+        },
+        "required": ["refresh"]
+    },
     responses={
         200: OpenApiResponse(description='Logout successful'),
         400: OpenApiResponse(description='Invalid refresh token')
-    }
+    },
+    tags=["Users"]
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -131,7 +143,8 @@ def logout_view(request):
     responses={
         200: OpenApiTypes.OBJECT,
         403: OpenApiResponse(description='Only managers can generate invites')
-    }
+    },
+    tags=["Users"]
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -160,9 +173,10 @@ def generate_invite(request):
         200: ShiftSerializer(many=True),
         201: ShiftSerializer,
         400: OpenApiResponse(description='Invalid input'),
-        403: OpenApiResponse(description='Not authenticated'),
-        401: OpenApiResponse(description='Unauthorized'),
-    }
+        401: OpenApiResponse(description='Not authenticated'),
+        403: OpenApiResponse(description='Unauthorized'),
+    },
+    tags=["Shifts"]
 )
 class ShiftViewSet(viewsets.ModelViewSet):
     serializer_class = ShiftSerializer
@@ -199,7 +213,8 @@ class ShiftViewSet(viewsets.ModelViewSet):
 
 @extend_schema(
     summary="Retrieve unread notifications",
-    responses=NotificationSerializer(many=True)
+    responses=NotificationSerializer(many=True),
+tags=["Notifications"]
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -217,7 +232,8 @@ def get_unread_notifications(request):
     request=SendNotificationSerializer,
     responses={
         201: OpenApiResponse(description='Confirmation Message'),
-    }
+    },
+    tags=["Notifications"]
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -247,7 +263,8 @@ def send_notification(request):
     responses={
         200: OpenApiResponse(description='Read confirmation'),
         404: OpenApiResponse(description='Notification not found or not assigned')
-    }
+    },
+    tags=["Notifications"]
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -260,3 +277,140 @@ def mark_notification_read(request, pk):
         return Response({"detail": "Marked as read."})
     except NotificationReadStatus.DoesNotExist:
         return Response({"detail": "Notification not found or not assigned."}, status=404)
+
+@extend_schema(
+    summary="Estimate gross pay for current and previous month",
+    responses={200: PayEstimateSerializer},
+    tags=["Shifts"]
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def pay_estimate(request):
+    user = request.user
+    now = timezone.now()
+
+    def calculate_pay(year, month):
+        first = datetime(year, month, 1)
+        last = datetime(year, month, monthrange(year, month)[1], 23, 59, 59)
+        shifts = Shift.objects.filter(employee=user, start_time__range=(first, last))
+        total_hours = sum([(s.end_time - s.start_time).total_seconds() / 3600 for s in shifts])
+        return round(total_hours * user.pay_rate, 2)
+
+    this_month_pay = calculate_pay(now.year, now.month)
+    last_month = (now.replace(day=1) - timedelta(days=1))
+    last_month_pay = calculate_pay(last_month.year, last_month.month)
+
+    return Response({
+        "this_month": this_month_pay,
+        "last_month": last_month_pay,
+    })
+
+@extend_schema(
+    summary="Request a shift swap",
+    request=ShiftSwapRequestSerializer,
+    responses={201: OpenApiResponse(description="Swap request submitted")},
+    tags=["Shifts"]
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def request_swap(request):
+    serializer = ShiftSwapRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+    return Response({"detail": "Swap request submitted."}, status=201)
+
+@extend_schema(
+    summary="Get pending swap requests relevant to the user",
+    responses={200: ShiftSwapRequestSerializer(many=True)},
+    tags=["Shifts"]
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_pending_swaps(request):
+    swaps = ShiftSwapRequest.objects.filter(
+        is_approved=False,
+        manager_approved=False
+    ).filter(
+        models.Q(shift__manager=request.user) |
+        models.Q(requested_to=request.user)
+    )
+    serializer = ShiftSwapRequestSerializer(swaps, many=True)
+    return Response(serializer.data)
+
+@extend_schema(
+    summary="Approve a shift swap request",
+    parameters=[OpenApiParameter(name="id", type=int, location=OpenApiParameter.PATH)],
+    responses={
+        200: OpenApiResponse(description="Approval registered"),
+        403: OpenApiResponse(description="Only the manager or proposed user can approve"),
+        404: OpenApiResponse(description="Swap request not found")
+    },
+    tags=["Shifts"]
+)
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def approve_swap(request, id):
+    try:
+        swap = ShiftSwapRequest.objects.get(id=id)
+    except ShiftSwapRequest.DoesNotExist:
+        return Response({"detail": "Swap request not found."}, status=404)
+
+    user = request.user
+    shift = swap.shift
+
+    if user == shift.manager:
+        swap.manager_approved = True
+    elif user == swap.requested_to:
+        swap.recipient_approved = True
+    else:
+        return Response({"detail": "Only the shift manager or proposed user can approve this swap."}, status=403)
+
+    if swap.manager_approved and swap.recipient_approved:
+        swap.is_approved = True
+        swap.approved_at = timezone.now()
+        shift.employee = swap.requested_to
+        shift.swap_approved = True
+        shift.is_swap_requested = False
+        shift.save()
+        swap.save()
+        return Response({"detail": "Swap fully approved and completed."})
+
+    swap.save()
+    return Response({"detail": "Approval recorded. Waiting for the other party."})
+
+@extend_schema(
+    summary="Reject a shift swap request",
+    parameters=[OpenApiParameter(name="id", type=int, location=OpenApiParameter.PATH)],
+    responses={
+        200: OpenApiResponse(description="Swap request rejected"),
+        403: OpenApiResponse(description="Only the manager or recipient can reject"),
+        404: OpenApiResponse(description="Swap request not found")
+    },
+    tags=["Shifts"]
+)
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def reject_swap(request, id):
+    try:
+        swap = ShiftSwapRequest.objects.get(id=id)
+    except ShiftSwapRequest.DoesNotExist:
+        return Response({"detail": "Swap request not found."}, status=404)
+
+    user = request.user
+    shift = swap.shift
+
+    if user != shift.manager and user != swap.requested_to:
+        return Response({"detail": "Only the manager or recipient can reject this request."}, status=403)
+
+    swap.is_approved = False
+    swap.manager_approved = False
+    swap.recipient_approved = False
+    swap.approved_at = None
+    shift.swap_approved = False
+    shift.is_swap_requested = False
+
+    swap.save()
+    shift.save()
+
+    return Response({"detail": "Swap request has been rejected."})
+
