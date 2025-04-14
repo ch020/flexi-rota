@@ -1,22 +1,20 @@
 import secrets
-from datetime import timedelta, datetime
 from calendar import monthrange
+from collections import defaultdict
+from datetime import datetime
+from statistics import stdev, mean
 from typing import cast
 
-from django.core.exceptions import PermissionDenied
-from django.utils import timezone
 from django.conf import settings
-
+from django.core.exceptions import PermissionDenied
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter, OpenApiExample
 from rest_framework import viewsets, generics
-from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter
-from drf_spectacular.types import OpenApiTypes
-
-from .models import *
 from .serializers import *
 
 
@@ -71,12 +69,28 @@ class AvailabilityViewSet(viewsets.ModelViewSet):
 
 @extend_schema(
     summary="Register a new user",
-    description="Registers a new user account with required fields: username, password, password2, role, name, email. Optionally accepts phone_number and pay_rate.",
+    description="Registers a new user account. If an invite token is present in the query string, links the user to an organisation.",
     request=RegisterSerializer,
     responses={
         201: UserSerializer,
         400: OpenApiResponse(description='Passwords did not match or input was invalid')
     },
+    examples=[
+        OpenApiExample(
+            "Register as Employee",
+            value={
+                "username": "testuser",
+                "email": "test@example.com",
+                "password": "strongpassword123",
+                "password2": "strongpassword123",
+                "role": "employee",
+                "first_name": "Test",
+                "last_name": "User",
+                "phone_number": "+447123456789",
+                "pay_rate": "10.50"
+            }
+        )
+    ],
     tags=["Users"]
 )
 class RegisterView(generics.CreateAPIView):
@@ -231,10 +245,30 @@ def get_unread_notifications(request):
     summary="Send a notification to one or more users",
     request=SendNotificationSerializer,
     responses={
-        201: OpenApiResponse(description='Confirmation Message'),
+        201: OpenApiResponse(
+            description="Confirmation Message",
+            examples=[
+                OpenApiExample(
+                    "Success",
+                    value={"detail": "Notification sent."},
+                    response_only=True
+                )
+            ]
+        )
     },
+    examples=[
+        OpenApiExample(
+            "Send to All Users",
+            value={"message": "Shift schedule updated", "recipients": []}
+        ),
+        OpenApiExample(
+            "Send to Specific Users",
+            value={"message": "Meeting at 10am", "recipients": [2, 5]}
+        )
+    ],
     tags=["Notifications"]
 )
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def send_notification(request):
@@ -280,8 +314,21 @@ def mark_notification_read(request, pk):
 
 @extend_schema(
     summary="Estimate gross pay for current and previous month",
-    responses={200: PayEstimateSerializer},
-    tags=["Shifts"]
+    responses={200: OpenApiResponse(
+        response=PayEstimateSerializer,
+        description="Estimated pay breakdown",
+        examples=[
+            OpenApiExample(
+                "Example Response",
+                value={
+                    "this_month": "387.50",
+                    "last_month": "472.00"
+                },
+                response_only=True
+            )
+        ]
+    )},
+    tags=["Analytics"]
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -307,8 +354,28 @@ def pay_estimate(request):
 
 @extend_schema(
     summary="Request a shift swap",
-    request=ShiftSwapRequestSerializer,
-    responses={201: OpenApiResponse(description="Swap request submitted")},
+    responses={
+        201: OpenApiResponse(
+            description="Swap request submitted",
+            examples=[
+                OpenApiExample(
+                    "Success",
+                    value={"detail": "Swap request submitted."},
+                    response_only=True
+                )
+            ]
+        )
+    },
+    examples=[
+        OpenApiExample(
+            "Request Swap",
+            value={
+                "shift": 12,
+                "requested_by": 3,
+                "requested_to": 7
+            }
+        )
+    ],
     tags=["Shifts"]
 )
 @api_view(['POST'])
@@ -413,4 +480,99 @@ def reject_swap(request, id):
     shift.save()
 
     return Response({"detail": "Swap request has been rejected."})
+
+@extend_schema(
+    summary="View shift distribution fairness within an organisation",
+    responses={
+        200: OpenApiResponse(
+            response=FairnessAnalyticsSerializer,
+            description="Shift count and weekly hours breakdown",
+            examples=[
+                OpenApiExample(
+                    "Example Response",
+                    value={
+                        "total_employees": 3,
+                        "average_shifts": 4.0,
+                        "fairness_score": 0.88,
+                        "shift_distribution": [
+                            {
+                                "employee": {
+                                    "id": 7,
+                                    "username": "alice",
+                                    "first_name": "Alice",
+                                    "last_name": "Evans"
+                                },
+                                "shifts": 5,
+                                "weekly_hours": {
+                                    "2025-W15": 40.0,
+                                    "2025-W16": 36.5
+                                }
+                            },
+                            {
+                                "employee": {
+                                    "id": 8,
+                                    "username": "bob",
+                                    "first_name": "Bob",
+                                    "last_name": "Smith"
+                                },
+                                "shifts": 3,
+                                "weekly_hours": {
+                                    "2025-W15": 24.0,
+                                    "2025-W16": 30.0
+                                }
+                            }
+                        ]
+                    },
+                    response_only=True
+                )
+            ]
+        )
+    },
+    tags=["Analytics"]
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def shift_fairness_analytics(request):
+    user = request.user
+
+    if user.role != 'manager':
+        return Response({"detail": "Only managers can access this data."}, status=403)
+
+    employees = User.objects.filter(organisation=user.organisation, role='employee')
+    now = timezone.now()
+    start_date = now - timedelta(weeks=4)
+
+    data = []
+    shift_counts = []
+
+    for emp in employees:
+        shifts = Shift.objects.filter(
+            employee=emp,
+            start_time__gte=start_date,
+        )
+
+        shift_count = shifts.count()
+        shift_counts.append(shift_count)
+
+        weekly_totals = defaultdict(float)
+        for shift in shifts:
+            week_label = shift.start_time.strftime("%Y-W%V")
+            weekly_totals[week_label] += shift.duration_hours()
+
+        data.append({
+            "employee": BasicUserSerializer(emp).data,
+            "shifts": shift_count,
+            "weekly_hours": {week: round(hours, 2) for week, hours in weekly_totals.items()}
+        })
+
+    avg = mean(shift_counts) if shift_counts else 0
+    fairness = 1 / (1 + stdev(shift_counts)) if len(shift_counts) > 1 else 1.0
+
+    return Response({
+        "total_employees": employees.count(),
+        "average_shifts": round(avg, 2),
+        "fairness_score": round(fairness, 2),
+        "shift_distribution": data
+    })
+
 

@@ -24,6 +24,9 @@ class InviteToken(models.Model):
         return f"Token for {self.organisation.name} (expires {self.expires_at.date()})"
 
 class User(AbstractUser):
+    """
+    Represents an authenticated user.
+    """
     ROLE_CHOICES = (
         ('manager', 'Manager'),
         ('employee', 'Employee'),
@@ -52,9 +55,13 @@ class Availability(models.Model):
         return f"{self.user.username} unavailable from {self.start_time} to {self.end_time}"
 
 class Shift(models.Model):
+    """
+    A work shift assigned to an employee, managed by a specific manager.
+    Supports swap requests between users.
+    """
     employee = models.ForeignKey(User, on_delete=models.CASCADE, related_name='employee')
     manager = models.ForeignKey(User, on_delete=models.CASCADE, related_name='manager')
-    start_time = models.DateTimeField(default=timezone.now)
+    start_time = models.DateTimeField(default=timezone.now, db_index=True)
     end_time = models.DateTimeField(default=default_end_time)
     is_swap_requested = models.BooleanField(default=False)
     swap_approved = models.BooleanField(default=False)
@@ -63,9 +70,13 @@ class Shift(models.Model):
         return f"{self.employee.username}'s shift starts at {self.start_time} to {self.end_time} and is managed by {self.manager.username}"
 
     def duration_hours(self):
+        """Calculates the length of the shift in hours."""
         return (self.end_time - self.start_time).total_seconds() / 3600
 
 class ShiftSwapRequest(models.Model):
+    """
+    Represents a work shift swapping request.
+    """
     shift = models.ForeignKey(Shift, related_name="shift", on_delete=models.CASCADE)
     requested_by = models.ForeignKey(User, related_name="swap_requests_sent", on_delete=models.CASCADE)
     requested_to = models.ForeignKey(User, related_name="swap_requests_received", on_delete=models.CASCADE)
@@ -79,6 +90,9 @@ class ShiftSwapRequest(models.Model):
         return f"Swap: {self.shift} → {self.requested_to.username} (Approved: {self.is_approved})"
 
 class Notification(models.Model):
+    """
+    Represents a notification sent from a manager to one or more users.
+    """
     message = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     recipients = models.ManyToManyField(User, through='NotificationReadStatus', related_name='notifications')
