@@ -49,7 +49,7 @@ class AvailabilityViewSet(viewsets.ModelViewSet):
     queryset = Availability.objects.all()
 
     def get_queryset(self):
-        user = self.request.user
+        user = cast(User, self.request.user)
 
         if user.role == "manager":
             return Availability.objects.filter(user__organisation=user.organisation)
@@ -61,7 +61,7 @@ class AvailabilityViewSet(viewsets.ModelViewSet):
 
     def get_object(self):
         obj = super().get_object()
-        user = self.request.user
+        user = cast(User, self.request.user)
         if user.role != 'manager' and obj.user != user:
             raise PermissionDenied("You do not have permission to access this object.")
         return obj
@@ -100,6 +100,7 @@ class RegisterView(generics.CreateAPIView):
 
 # TEST CLASSES
 
+# noinspection PyUnusedLocal
 @extend_schema(
     summary="Test GET request (no authentication required)",
     description="Returns a simple success message to confirm the API is running.",
@@ -123,6 +124,7 @@ def test_api_auth(request):
     return Response({"message": f"API is working! Logged in as {request.user.username}"})
 
 # USER CLASSES
+# noinspection PyBroadException
 @extend_schema(
     summary="Logout user",
     description="Blacklists the provided refresh token, effectively logging out the user.\n\n**Required field:** `refresh` (string).",
@@ -147,7 +149,7 @@ def logout_view(request):
         token = RefreshToken(refresh_token)
         token.blacklist()
         return Response({"detail": "Logout successful"})
-    except Exception as e:
+    except Exception:
         return Response({"detail": "Invalid refresh token"}, status=400)
 
 # INVITE LINK CLASSES
