@@ -38,7 +38,7 @@ const useEmployeeAvailability = () => {
 
   return { availabilityData, loading, error };
 };
-
+//test
 // Register Chart.js components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
