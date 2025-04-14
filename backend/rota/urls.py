@@ -24,5 +24,6 @@ urlpatterns = [
     path('swaps/pending/', get_pending_swaps, name='get_pending_swaps'),
     path('swaps/approve/<int:id>/', approve_swap, name='approve_swap'),
     path('swaps/reject/<int:id>/', reject_swap, name='reject_swap'),
+    path('analytics/fairness/', shift_fairness_analytics, name='shift_fairness_analytics'),
     path('', include(router.urls)),
 ]

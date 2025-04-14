@@ -4,6 +4,10 @@ from rest_framework.validators import UniqueValidator
 
 from .models import *
 
+class BasicUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'first_name', 'last_name']
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -95,14 +99,14 @@ class SendNotificationSerializer(serializers.Serializer):
     )
 
     class Meta:
-        ref_name = "SendNotificationSerializer"
+        ref_name = "SendNotification"
 
 class PayEstimateSerializer(serializers.Serializer):
     this_month = serializers.DecimalField(max_digits=10, decimal_places=2)
     last_month = serializers.DecimalField(max_digits=10, decimal_places=2)
 
     class Meta:
-        ref_name = "PayEstimateSerializer"
+        ref_name = "PayEstimate"
 
 class ShiftSwapRequestSerializer(serializers.ModelSerializer):
     shift = serializers.PrimaryKeyRelatedField(queryset=Shift.objects.all())
@@ -132,3 +136,22 @@ class ShiftSwapRequestSerializer(serializers.ModelSerializer):
             'requested_at',
             'approved_at'
         ]
+
+class EmployeeShiftCountSerializer(serializers.Serializer):
+    employee = BasicUserSerializer()
+    shifts = serializers.IntegerField()
+    weekly_hours = serializers.DictField(
+        child=serializers.FloatField(), help_text="Hours worked per ISO week"
+    )
+
+    class Meta:
+        ref_name = "EmployeeShiftCount"
+
+class FairnessAnalyticsSerializer(serializers.Serializer):
+    total_employees = serializers.IntegerField()
+    average_shifts = serializers.FloatField()
+    fairness_score = serializers.FloatField()
+    shift_distribution = EmployeeShiftCountSerializer(many=True)
+
+    class Meta:
+        ref_name = "FairnessAnalytics"
