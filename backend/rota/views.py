@@ -10,7 +10,7 @@ from django.core.exceptions import PermissionDenied
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter, OpenApiExample
 from rest_framework import viewsets, generics
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -18,7 +18,84 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .serializers import *
 
 
-# Create your views here.
+@extend_schema(
+    summary="Manage roles within an organisation",
+    description="Only managers can view, create, or delete roles in their organisation.",
+    responses={200: RoleSerializer(many=True)},
+    tags=["Roles"]
+)
+class RoleViewSet(viewsets.ModelViewSet):
+    serializer_class = RoleSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = cast(User, self.request.user)
+        return Role.objects.filter(organisation=user.organisation)
+
+    def perform_create(self, serializer):
+        user = cast(User, self.request.user)
+        if user.role != 'manager':
+            raise PermissionDenied("Only managers can create roles.")
+        serializer.save(organisation=user.organisation)
+
+    def destroy(self, request, *args, **kwargs):
+        if request.user.role != 'manager':
+            return Response({"detail": "Only managers can delete roles."}, status=403)
+        return super().destroy(request, *args, **kwargs)
+
+@extend_schema(
+    summary="Manage shift templates (unassigned shifts)",
+    description="Create, update, and list unassigned shift templates. These represent future shift needs before employee assignment.",
+    responses={200: ShiftTemplateSerializer(many=True)},
+    tags=["Shifts"]
+)
+class ShiftTemplateViewSet(viewsets.ModelViewSet):
+    serializer_class = ShiftTemplateSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return ShiftTemplate.objects.filter(manager=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(manager=self.request.user)
+
+    @extend_schema(
+        summary="Add or update required roles for a shift template",
+        description="Specify how many employees of each role are needed for this shift template. This will be used in auto-assignment.",
+        request=ShiftRoleRequirementSerializer(many=True),
+        responses={
+            200: OpenApiResponse(
+                description="Roles set",
+                examples=[
+                    OpenApiExample(
+                        "Set required roles",
+                        value=[
+                            {"role": 3, "quantity": 2},
+                            {"role": 5, "quantity": 1}
+                        ]
+                    )
+                ]
+            )
+        },
+        tags=["Shifts"]
+    )
+    @action(detail=True, methods=["post"], url_path='set-roles')
+    def set_roles(self, request, pk=None):
+        shift_template = self.get_object()
+        ShiftRoleRequirement.objects.filter(shift_template=shift_template).delete()
+
+        serializer = ShiftRoleRequirementSerializer(data=request.data, many=True)
+        serializer.is_valid(raise_exception=True)
+
+        for item in serializer.validated_data:
+            ShiftRoleRequirement.objects.create(
+                shift_template=shift_template,
+                role=item['role'],
+                quantity=item['quantity'],
+            )
+
+        return Response({"detail": "Role updated successfully."})
+
 @extend_schema(
     summary="List all users",
     description="Returns a list of all registered users. Requires authentication.",
@@ -26,9 +103,14 @@ from .serializers import *
     tags=["Users"]
 )
 class UserViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = cast(User, self.request.user)
+        if user.role == 'manager':
+            return User.objects.filter(organisation=user.organisation)
+        return User.objects.filter(id=user.id)
 
 @extend_schema(
     summary="CRUD operations on availability",
@@ -157,7 +239,7 @@ def logout_view(request):
     summary="Generate an invite link",
     description="Only accessible by users with role 'manager'.\n\nGenerates a time-limited (3 days) invite link that new employees can use to register under the manager's organisation.",
     responses={
-        200: OpenApiTypes.OBJECT,
+        201: OpenApiResponse(description="Invite link created"),
         403: OpenApiResponse(description='Only managers can generate invites')
     },
     tags=["Users"]
@@ -178,7 +260,7 @@ def generate_invite(request):
     )
 
     invite_url = settings.BACKEND_URL + f"register/?invite={token}"
-    return Response({"invite_url": invite_url})
+    return Response({"invite_url": invite_url}, status=201)
 
 #SHIFT CLASSES
 @extend_schema(
@@ -283,10 +365,14 @@ def send_notification(request):
 
     notification = Notification.objects.create(message=data['message'])
 
-    if not data['recipients']:
-        users = User.objects.all()
+    if not data['recipients'] and not data['roles']:
+        users = User.objects.filter(organisation=request.user.organisation)
     else:
         users = User.objects.filter(id__in=data['recipients'])
+        role_users = User.objects.filter(role_title__id__in=data['roles'], organisation=request.user.organisation)
+        users |= role_users
+
+    users = users.distinct()
 
     for user in users:
         NotificationReadStatus.objects.create(notification=notification, user=user)
@@ -636,4 +722,226 @@ def shift_fairness_analytics(request):
         "shift_distribution": data
     })
 
+# CHAT VIEWS
+@extend_schema(
+    summary="Create a new chat",
+    description="Only managers can create a chat with specific users, roles, or both. The users must belong to the same organisation.",
+    request=OpenApiTypes.OBJECT,
+    examples=[
+        OpenApiExample(
+            "Create a chat with selected users and roles",
+            value={
+                "title": "Kitchen Staff Group",
+                "user_ids": [4, 7],
+                "role_ids": [2]
+            }
+        )
+    ],
+    responses={201: ChatSerializer},
+    tags=["Chats"]
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_chat(request):
+    if request.user.role != 'manager':
+        return Response({'detail': 'Only managers can create chats.'}, status=403)
 
+    title = request.data.get('title')
+    user_ids = request.data.get('user_ids', [])
+    role_ids = request.data.get('role_ids', [])
+
+    if not title:
+        return Response({'detail': 'Title is required.'}, status=400)
+
+    chat = Chat.objects.create(title=title, created_by=request.user)
+
+    users = User.objects.filter(id__in=user_ids, organisation=request.user.organisation)
+    roles = Role.objects.filter(id__in=role_ids, organisation=request.user.organisation)
+
+    for role in roles:
+        users |= User.objects.filter(role_title=role)
+
+    chat.participants.set(users.distinct())
+    chat.save()
+    return Response(ChatSerializer(chat).data, status=201)
+
+@extend_schema(
+    summary="Send a message in a chat",
+    description="Send a new message in a specified chat. The user must be a participant of the chat.",
+    request=OpenApiTypes.OBJECT,
+    parameters=[
+        OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, description="Chat ID")
+    ],
+    examples=[
+        OpenApiExample(
+            "Send a message",
+            value={"content": "Don't forget the shift tomorrow at 9am!"}
+        )
+    ],
+    responses={200: MessageSerializer},
+    tags=["Chats"]
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def send_message(request, chat_id):
+    chat = Chat.objects.get(id=chat_id)
+    if request.user not in chat.participants.all():
+        return Response({'detail': 'You are not a participant of this chat.'}, status=403)
+    content = request.data.get('content')
+    if not content:
+        return Response({'detail': 'Message content is required.'}, status=400)
+    message= Message.objects.create(chat=chat, sender=request.user, content=content)
+    return Response(MessageSerializer(message).data)
+
+@extend_schema(
+    summary="Delete a message",
+    description="Deletes a message sent by the user. Only the sender of the message can delete it.",
+    parameters=[
+        OpenApiParameter(name="message_id", type=int, location=OpenApiParameter.PATH, description="Message ID")
+    ],
+    responses={
+        200: OpenApiResponse(description="Message deleted"),
+        404: OpenApiResponse(description="Message not found or permission denied")
+    },
+    tags=["Chats"]
+)
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_message(request, message_id):
+    try:
+        message = Message.objects.get(id=message_id, sender=request.user)
+        message.delete()
+        return Response({'detail': 'Message deleted.'})
+    except Message.DoesNotExist:
+        return Response({'detail': 'Message not found or you are not the sender.'}, status=404)
+
+@extend_schema(
+    summary="Get all messages in a chat",
+    description="Returns all messages for a given chat ID. The user must be a participant in the chat.",
+    parameters=[
+        OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, description="Chat ID")
+    ],
+    responses={200: MessageSerializer(many=True)},
+    tags=["Chats"]
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_chat_messages(request, chat_id):
+    chat = Chat.objects.get(id=chat_id)
+    if request.user not in chat.participants.all():
+        return Response({'detail': 'You are not a participant of this chat.'}, status=403)
+    messages = chat.messages.all()
+    return Response(MessageSerializer(messages, many=True).data)
+
+@extend_schema(
+    summary="Automatically assign unassigned shifts based on required roles and fairness",
+    description="Assigns employees to all existing shift templates. Ensures fairness by distributing shifts across the least-burdened users.",
+    responses={
+        201: OpenApiResponse(
+            description="Assignment success or failure",
+            examples=[
+                OpenApiExample(
+                    "Success",
+                    value={"detail": "Shifts auto-assigned based on fairness and role requirements."},
+                    response_only=True
+                ),
+                OpenApiExample(
+                    "Failure",
+                    value={"detail": "Not enough users with role 'Chef' to fill shift template 4."},
+                    response_only=True
+                )
+            ]
+        )
+    },
+    tags=["Shifts"]
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def auto_assign_shifts(request):
+    if request.user.role != 'manager':
+        return Response({'detail': 'Only managers can auto-assign shifts.'}, status=403)
+
+    templates = ShiftTemplate.objects.filter(manager=request.user)
+
+    past_weeks = timezone.now() - timedelta(weeks=4)
+    employees = User.objects.filter(role='employee', organisation=request.user.organisation)
+
+    workload = {
+        emp.id: Shift.objects.filter(
+            employee=emp,
+            start_time__gte=past_weeks
+        ).aggregate(
+            hours=models.Sum(models.F('end_time') - models.F('start_time'))
+        )['hours'] or timedelta()
+        for emp in employees
+    }
+
+    for template in templates:
+        role_requirements = ShiftRoleRequirement.objects.filter(shift_template=template)
+        assigned_users = set()
+
+        for req in role_requirements:
+            eligible_users = [u for u in employees if u.role_title == req.role and u.id not in assigned_users]
+            sorted_users = sorted(eligible_users, key=lambda u: workload[u.id])
+
+            if len(sorted_users) < req.quantity:
+                return Response({
+                    "detail": f"Not enough users with role '{req.role.name}' to fill shift template {template.id}."
+                }, status=400)
+
+            for user in sorted_users[:req.quantity]:
+                Shift.objects.create(
+                    manager=template.manager,
+                    start_time=template.start_time,
+                    end_time=template.end_time,
+                    employee=user
+                )
+                assigned_users.add(user)
+                workload[user.id] += template.end_time - template.start_time
+
+        template.delete()
+
+    return Response({'detail': 'Shifts auto-assigned based on fairness and role requirements.'}, status=201)
+
+@extend_schema(
+    summary="Change user password",
+    description="Allows an authenticated user to change their password by providing the current and new password.",
+    request=ChangePasswordSerializer,
+    examples=[
+        OpenApiExample(
+            "Change Password",
+            value={
+                "old_password": "currentPassword123",
+                "new_password": "newSecurePassword456"
+            },
+            request_only=True
+        )
+    ],
+    responses={
+        200: OpenApiResponse(description="Password changed successfully"),
+        400: OpenApiResponse(description="Invalid input or current password is incorrect"),
+        401: OpenApiResponse(description="Authentication credentials were not provided")
+    },
+    tags=["Users"]
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def change_password(request):
+    serializer = ChangePasswordSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    user = cast(User, request.user)
+    old_password = serializer.validated_data["old_password"]
+    new_password = serializer.validated_data["new_password"]
+
+    if not user.check_password(old_password):
+        return Response({"detail": "Current password is incorrect."}, status=400)
+
+    try:
+        validate_password(new_password, user=user)
+    except serializers.ValidationError as e:
+        return Response({"detail": e.messages}, status=400)
+
+    user.set_password(new_password)
+    user.save()
+    return Response({"detail": "Password changed successfully."}, status=200)

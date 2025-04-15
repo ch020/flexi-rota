@@ -4,15 +4,24 @@ from rest_framework.validators import UniqueValidator
 
 from .models import *
 
+class RoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Role
+        fields = ['id', 'name']
+
 class BasicUserSerializer(serializers.ModelSerializer):
+    role_title = RoleSerializer()
+
     class Meta:
         model = User
-        fields = ['id', 'username', 'first_name', 'last_name']
+        fields = ['id', 'username', 'role_title', 'first_name', 'last_name']
 
 class UserSerializer(serializers.ModelSerializer):
+    role_title = RoleSerializer()
+
     class Meta:
         model = User
-        fields = ('id', 'username', 'email', 'role', 'first_name', 'last_name', 'phone_number', 'pay_rate')
+        fields = ('id', 'username', 'email', 'role','role_title', 'first_name', 'last_name', 'phone_number', 'pay_rate')
 
     def to_representation(self, instance):
         rep = super().to_representation(instance)
@@ -41,12 +50,15 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         user = User(**validated_data)
 
-        if invite_token:
-            try:
-                invite = InviteToken.objects.get(token=invite_token, expires_at__gt=timezone.now())
-                user.organisation = invite.organisation
-            except InviteToken.DoesNotExist:
-                raise serializers.ValidationError({"invite": "Invalid or expired invite link"})
+        if user.role == 'employee':
+            if invite_token:
+                try:
+                    invite = InviteToken.objects.get(token=invite_token, expires_at__gt=timezone.now())
+                    user.organisation = invite.organisation
+                except InviteToken.DoesNotExist:
+                    raise serializers.ValidationError({"invite": "Invalid or expired invite link"})
+            else:
+                raise serializers.ValidationError({"invite": "Invite token is required for employees."})
 
         user.set_password(password)
         user.save()
@@ -66,10 +78,33 @@ class AvailabilitySerializer(serializers.ModelSerializer):
 
         return data
 
+class ShiftRoleRequirementSerializer(serializers.ModelSerializer):
+    role = serializers.PrimaryKeyRelatedField(queryset=Role.objects.none())
+
+    class Meta:
+        model = ShiftRoleRequirement
+        fields = ['role', 'quantity']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        request = self.context.get('request')
+        if request and hasattr(request.user, 'organisation'):
+            self.fields['role'].queryset = Role.objects.filter(organisation=request.user.organisation)
+
+class ShiftTemplateSerializer(serializers.ModelSerializer):
+    required_roles = ShiftRoleRequirementSerializer(
+        source='shiftrolerequirement_set', many=True, read_only=True
+    )
+
+    class Meta:
+        model = ShiftTemplate
+        fields = ['id', 'start_time', 'end_time', 'required_roles']
+
 class ShiftSerializer(serializers.ModelSerializer):
     class Meta:
         model = Shift
-        exclude = []
+        fields = '__all__'
 
     def validate(self, data):
         start = data.get('start_time')
@@ -94,6 +129,10 @@ class NotificationSerializer(serializers.ModelSerializer):
 class SendNotificationSerializer(serializers.Serializer):
     message = serializers.CharField()
     recipients = serializers.ListField(
+        child=serializers.IntegerField(),
+        allow_empty=True
+    )
+    roles = serializers.ListField(
         child=serializers.IntegerField(),
         allow_empty=True
     )
@@ -155,3 +194,24 @@ class FairnessAnalyticsSerializer(serializers.Serializer):
 
     class Meta:
         ref_name = "FairnessAnalytics"
+
+class MessageSerializer(serializers.ModelSerializer):
+    sender = serializers.StringRelatedField()
+
+    class Meta:
+        model = Message
+        fields = ['id', 'sender', 'content', 'timestamp']
+
+class ChatSerializer(serializers.ModelSerializer):
+    messages = MessageSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Chat
+        fields = ['id', 'title', 'participants', 'messages']
+
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(write_only=True, required=True, help_text="Current password")
+    new_password = serializers.CharField(write_only=True, required=True, help_text="New password")
+
+    class Meta:
+        ref_name = "ChangePasswordRequest"
