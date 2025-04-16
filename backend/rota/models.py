@@ -5,6 +5,10 @@ from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
 from django.core.validators import RegexValidator
 
+ROLE_CHOICES = (
+        ('manager', 'Manager'),
+        ('employee', 'Employee'),
+    )
 
 # Create your models here.
 class Organisation(models.Model):
@@ -25,6 +29,7 @@ class Role(models.Model):
 class InviteToken(models.Model):
     organisation = models.ForeignKey(Organisation, on_delete=models.CASCADE)
     token = models.CharField(max_length=100, unique=True)
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="employee")
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
 
@@ -39,10 +44,6 @@ class User(AbstractUser):
     """
     Represents an authenticated user.
     """
-    ROLE_CHOICES = (
-        ('manager', 'Manager'),
-        ('employee', 'Employee'),
-    )
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
     role_title = models.ForeignKey(Role, on_delete=models.SET_NULL, null=True, blank=True)
     phone_number = models.CharField(max_length=15, blank=True, null=True, validators=[
