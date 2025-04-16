@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import reactLogo from './assets/react.svg';
@@ -62,3 +63,13 @@ function App() {
 
 
 export default App;
+=======
+import ShiftPlanner from './pages/ShiftPlanner';
+import './index.css'; // Adjust to the path of your stylesheet
+
+function App() {
+  return <ShiftPlanner />;
+}
+
+export default App;
+>>>>>>> 575a125 (pre-installing tailwindv4)
