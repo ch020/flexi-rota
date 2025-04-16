@@ -1,4 +1,5 @@
 from django.contrib.auth.password_validation import validate_password
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
@@ -50,15 +51,16 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         user = User(**validated_data)
 
-        if user.role == 'employee':
-            if invite_token:
-                try:
-                    invite = InviteToken.objects.get(token=invite_token, expires_at__gt=timezone.now())
-                    user.organisation = invite.organisation
-                except InviteToken.DoesNotExist:
-                    raise serializers.ValidationError({"invite": "Invalid or expired invite link"})
-            else:
-                raise serializers.ValidationError({"invite": "Invite token is required for employees."})
+        if invite_token:
+            try:
+                invite = InviteToken.objects.get(token=invite_token, expires_at__gt=timezone.now())
+                user.organisation = invite.organisation
+                user.role = invite.role
+            except InviteToken.DoesNotExist:
+                raise serializers.ValidationError({"invite": "Invalid or expired invite link"})
+        else:
+            if validated_data["role"] != "manager":
+                raise serializers.ValidationError({"invite": "Only managers can sign-up without an invite link. Please contact an administrator for an invite link."})
 
         user.set_password(password)
         user.save()
@@ -122,7 +124,8 @@ class NotificationSerializer(serializers.ModelSerializer):
         model = Notification
         fields = ['id', 'message', 'created_at', 'read']
 
-    def get_read(self, obj):
+    @extend_schema_field(field=serializers.BooleanField())
+    def get_read(self, obj) -> bool:
         user = self.context['request'].user
         return NotificationReadStatus.objects.filter(user=user, notification=obj, read=True).exists()
 
@@ -215,3 +218,9 @@ class ChangePasswordSerializer(serializers.Serializer):
 
     class Meta:
         ref_name = "ChangePasswordRequest"
+
+class InviteLinkResponseSerializer(serializers.Serializer):
+    invite_url = serializers.URLField()
+
+class LogoutRequestSerializer(serializers.Serializer):
+    refresh = serializers.CharField(required=True)

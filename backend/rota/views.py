@@ -25,6 +25,7 @@ from .serializers import *
     tags=["Roles"]
 )
 class RoleViewSet(viewsets.ModelViewSet):
+    queryset = Role.objects.none()
     serializer_class = RoleSerializer
     permission_classes = [IsAuthenticated]
 
@@ -50,6 +51,7 @@ class RoleViewSet(viewsets.ModelViewSet):
     tags=["Shifts"]
 )
 class ShiftTemplateViewSet(viewsets.ModelViewSet):
+    queryset = ShiftTemplate.objects.none()
     serializer_class = ShiftTemplateSerializer
     permission_classes = [IsAuthenticated]
 
@@ -103,6 +105,7 @@ class ShiftTemplateViewSet(viewsets.ModelViewSet):
     tags=["Users"]
 )
 class UserViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = User.objects.none()
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated]
 
@@ -210,13 +213,7 @@ def test_api_auth(request):
 @extend_schema(
     summary="Logout user",
     description="Blacklists the provided refresh token, effectively logging out the user.\n\n**Required field:** `refresh` (string).",
-    request={
-        "type": "object",
-        "properties": {
-            "refresh": {"type": "string", "example": "your-refresh-token"}
-        },
-        "required": ["refresh"]
-    },
+    request=LogoutRequestSerializer,
     responses={
         200: OpenApiResponse(description='Logout successful'),
         400: OpenApiResponse(description='Invalid refresh token')
@@ -237,9 +234,22 @@ def logout_view(request):
 # INVITE LINK CLASSES
 @extend_schema(
     summary="Generate an invite link",
-    description="Only accessible by users with role 'manager'.\n\nGenerates a time-limited (3 days) invite link that new employees can use to register under the manager's organisation.",
+    description="Generates a time-limited (3 days) invite link for a manager or employee to join your organisation.",
+    request=OpenApiTypes.OBJECT,
+    examples=[
+        OpenApiExample(
+            "Generate employee invite",
+            value={"role": "employee"},
+            request_only=True
+        ),
+        OpenApiExample(
+            "Generate manager invite",
+            value={"role": "manager"},
+            request_only=True
+        )
+    ],
     responses={
-        201: OpenApiResponse(description="Invite link created"),
+        201: OpenApiResponse(InviteLinkResponseSerializer, description="Invite link created"),
         403: OpenApiResponse(description='Only managers can generate invites')
     },
     tags=["Users"]
@@ -250,13 +260,15 @@ def generate_invite(request):
     if request.user.role != 'manager':
         return Response({"detail": "Only managers can generate invites"}, status=403)
 
+    role = request.data.get("role")
     token = secrets.token_urlsafe(16)
     expiry = timezone.now() + timedelta(days=3)
 
     InviteToken.objects.create(
         organisation=request.user.organisation,
         token=token,
-        expires_at=expiry
+        expires_at=expiry,
+        role=role,
     )
 
     invite_url = settings.BACKEND_URL + f"register/?invite={token}"
@@ -383,8 +395,8 @@ def send_notification(request):
     summary="Mark a specific notification as read",
     parameters=[OpenApiParameter("pk", int, OpenApiParameter.PATH, required=True, description="ID of the notification to mark as read")],
     responses={
-        200: OpenApiResponse(description='Read confirmation'),
-        404: OpenApiResponse(description='Notification not found or not assigned')
+        200: OpenApiResponse(OpenApiTypes.OBJECT, description='Read confirmation'),
+        404: OpenApiResponse(OpenApiTypes.OBJECT, description='Notification not found or not assigned')
     },
     tags=["Notifications"]
 )
@@ -442,6 +454,7 @@ def pay_estimate(request):
 
 @extend_schema(
     summary="Request a shift swap",
+    request=ShiftSwapRequestSerializer,
     responses={
         201: OpenApiResponse(
             description="Swap request submitted",
@@ -495,6 +508,7 @@ def get_pending_swaps(request):
 @extend_schema(
     summary="Approve a shift swap request",
     parameters=[OpenApiParameter(name="id", type=int, location=OpenApiParameter.PATH)],
+    request=None,
     responses={
         200: OpenApiResponse(
             description="Approval registered",
@@ -568,6 +582,7 @@ def approve_swap(request, id):
 @extend_schema(
     summary="Reject a shift swap request",
     parameters=[OpenApiParameter(name="id", type=int, location=OpenApiParameter.PATH)],
+    request=None,
     responses={
         200: OpenApiResponse(
             description="Swap request rejected",
@@ -836,6 +851,7 @@ def get_chat_messages(request, chat_id):
 @extend_schema(
     summary="Automatically assign unassigned shifts based on required roles and fairness",
     description="Assigns employees to all existing shift templates. Ensures fairness by distributing shifts across the least-burdened users.",
+    request=None,
     responses={
         201: OpenApiResponse(
             description="Assignment success or failure",
