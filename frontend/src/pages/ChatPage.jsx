@@ -70,12 +70,12 @@ const ChatPage = () => {
                         </>
                     ) : (
                         <div className="chat-placeholder">
-                            <h2>Vos messages</h2>
+                            <h2>your messages</h2>
                             <p>
-                                Envoyez des photos et des messages privés à un(e) ami(e) ou à un groupe
+                                send pictures or messages to a friend
                             </p>
                             <button onClick={() => alert('Start a new chat')}>
-                                Envoyer un message
+                                send a message
                             </button>
                         </div>
                     )}
