@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const baseURL = import.meta.env.VITE_API_BASE_URL
+// Use the environment variable to set the base URL for your API
+const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+console.log("Base URL:", baseURL);
 
 /**
  * Gets the cookie with the specified name, or null if not found.
@@ -17,8 +19,8 @@ function getCookie(name) {
  * @type {axios.AxiosInstance}
  */
 const api = axios.create({
-    baseURL,
-    withCredentials: true,
+    baseURL,          // Set base URL to the environment variable
+    withCredentials: true, // Ensure cookies are sent with each request
 });
 
 api.interceptors.request.use(

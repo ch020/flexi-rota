@@ -1,26 +1,23 @@
 import React, { useState } from "react";
-import api, { setAuthCookies } from "../services/api"; // Adjust the path according to where your component is located
+import { useNavigate } from "react-router-dom";
+import api, { setAuthCookies } from "../services/api";
 
 const LoginPage = ({ onLogin }) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const navigate = useNavigate();  // <-- Add this line
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     try {
-      // Call the API to login
       const response = await api.post("/login/", { username, password });
-
-      // Extract access and refresh tokens from the response
       const { access, refresh } = response.data;
-
-      // Store the tokens in cookies
       setAuthCookies(access, refresh);
 
-      // Call the onLogin callback to change the app state
-      onLogin();
+      onLogin();             // Update state in App.jsx
+      navigate("/menu");     // <-- Navigate to Main Menu page
     } catch (error) {
       console.error("Login failed:", error);
       setError("Invalid username or password");
