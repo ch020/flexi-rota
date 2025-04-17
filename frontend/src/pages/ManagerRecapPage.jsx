@@ -37,6 +37,7 @@ const useEmployeeAvailability = () => {
     ];
     setAvailabilityData(simulatedData);
     setLoading(false);
+
   }, []);
 
   return { availabilityData, loading, error };
