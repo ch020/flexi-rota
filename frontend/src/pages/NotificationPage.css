@@ -1,0 +1,60 @@
+/* NotificationPage.css */
+
+.notification-page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 20px;
+    background-color: #eef6fc; /* Light blue background */
+    height: 100vh;
+    overflow-y: auto;
+}
+
+.notification-header {
+    width: 100%;
+    text-align: center;
+    font-size: 26px;
+    font-weight: bold;
+    color: #1a73e8; /* Blue header text */
+    margin-bottom: 25px;
+    border-bottom: 2px solid #1a73e8; /* Blue underline */
+    padding-bottom: 10px;
+}
+
+.notification-list {
+    width: 100%;
+    max-width: 600px;
+    background-color: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+.notification-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px 20px;
+    border-bottom: 1px solid #dce4ec; /* Light blue-gray border */
+    transition: background-color 0.3s ease;
+}
+
+.notification-item:last-child {
+    border-bottom: none;
+}
+
+.notification-text {
+    font-size: 16px;
+    color: #333; /* Darker text for better readability */
+}
+
+.notification-time {
+    font-size: 14px;
+    color: #666; /* Slightly darker gray for time */
+}
+
+.notification-item:hover {
+    background-color: #e3f2fd; /* Light blue hover effect */
+    cursor: pointer;
+}

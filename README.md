@@ -109,7 +109,6 @@ npm run dev
 backend/
 ├── backend/            # Django settings
 ├── rota/               # App: models, views, serializers
-├── docs/               # Optional: Swagger static UI
 ├── manage.py
 └── requirements.txt
 ```
@@ -128,7 +127,7 @@ Developed by:
 
 ## 📬 Contact / Issues
 
-If you find a bug or want to contribute, feel free to open an issue or PR. For questions, reach out to Matt or any team member directly.
+If you find a bug or want to contribute, feel free to open an issue or PR.
 
 ---
 
