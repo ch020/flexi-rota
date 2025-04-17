@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import tailwindcss from '@tailwindcss/vite'
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 const hours = Array.from({ length: 24 }, (_, i) => `${i}:00`);
