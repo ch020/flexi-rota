@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-//import './ChatPage.css'; // Optional: Add styles for the chat page
+import './ChatPage.css'; // Don't forget to import your CSS
 
 const ChatPage = () => {
     const [employees, setEmployees] = useState(['Alice', 'Bob', 'Charlie']);
@@ -10,7 +10,6 @@ const ChatPage = () => {
     const handleSendMessage = () => {
         if (newMessage.trim() === '' || !selectedEmployee) return;
 
-        // Add the new message to the chat for the selected employee
         setMessages({
             ...messages,
             [selectedEmployee]: [
@@ -23,10 +22,9 @@ const ChatPage = () => {
 
     return (
         <div className="chat-page">
-            <h1>Employee Chat</h1>
             <div className="chat-container">
                 <div className="employee-list">
-                    <h2>Employees</h2>
+                    <h2>Messages</h2>
                     <ul>
                         {employees.map((employee) => (
                             <li
@@ -61,6 +59,11 @@ const ChatPage = () => {
                                     placeholder="Type your message..."
                                     value={newMessage}
                                     onChange={(e) => setNewMessage(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            handleSendMessage();
+                                        }
+                                    }}
                                 />
                                 <button onClick={handleSendMessage}>Send</button>
                             </div>
