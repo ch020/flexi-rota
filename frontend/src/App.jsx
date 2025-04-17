@@ -5,6 +5,8 @@ import viteLogo from '/vite.svg';
 import './App.css';
 import EmployeeAvailability from './pages/ManagerRecapPage';
 import ChatPage from './pages/ChatPage';
+import NotificationPage from './pages/NotificationPage';
+
 
 function App() {
   const [count, setCount] = useState(0);
@@ -14,6 +16,7 @@ function App() {
       <Routes>
         <Route path="/manager-recap" element={<EmployeeAvailability />} />
         <Route path="/chat" element={<ChatPage />} />
+        <Route path="/notifications" element={<NotificationPage />} />
         <Route
           path="/"
           element={
@@ -44,6 +47,9 @@ function App() {
                 </Link>
                 <Link to="/chat">
                   <button>Go to Chat Page</button>
+                </Link>
+                <Link to="/notifications">
+                  <button>Go to Notification Page</button>
                 </Link>
               </div>
             </div>
