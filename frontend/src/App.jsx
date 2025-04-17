@@ -3,7 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import reactLogo from './assets/react.svg';
 import viteLogo from '/vite.svg';
 import './App.css';
-import EmployeeAvailability from './pages/manager_recap';
+import EmployeeAvailability from './pages/ManagerRecapPage';
+import ChatPage from './pages/ChatPage';
 
 function App() {
   const [count, setCount] = useState(0);
@@ -12,6 +13,7 @@ function App() {
     <Router>
       <Routes>
         <Route path="/manager-recap" element={<EmployeeAvailability />} />
+        <Route path="/chat" element={<ChatPage />} />
         <Route
           path="/"
           element={
@@ -40,6 +42,9 @@ function App() {
                 <Link to="/manager-recap">
                   <button>Go to Manager Recap</button>
                 </Link>
+                <Link to="/chat">
+                  <button>Go to Chat Page</button>
+                </Link>
               </div>
             </div>
           }
@@ -48,5 +53,6 @@ function App() {
     </Router>
   );
 }
+
 
 export default App;
