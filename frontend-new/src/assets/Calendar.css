@@ -1,0 +1,36 @@
+/* Custom styles for the calendar */
+.custom-calendar {
+    background-color: #000; /* Black background */
+    color: #fff; /* White text */
+    border: none;
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.custom-calendar .react-calendar__tile {
+    background-color: #000; /* Black background for tiles */
+    color: #fff; /* White text for tiles */
+    border-radius: 4px;
+    transition: background-color 0.3s ease;
+}
+
+.custom-calendar .react-calendar__tile:hover {
+    background-color: #333; /* Darker background on hover */
+}
+
+.custom-calendar .react-calendar__tile--active {
+    background-color: transparent !important; /* Remove blue background for active tiles */
+    color: #fff !important; /* Keep text white */
+    box-shadow: none !important; /* Remove any box shadow */
+}
+
+.custom-calendar .react-calendar__tile--now {
+    background-color: #444; /* Gray background for today's date */
+    color: #fff; /* White text for today's date */
+}
+
+.custom-calendar .highlighted-date {
+    background-color: #4caf50; /* Green background for highlighted dates */
+    color: #fff; /* White text for highlighted dates */
+    border-radius: 50%;
+}

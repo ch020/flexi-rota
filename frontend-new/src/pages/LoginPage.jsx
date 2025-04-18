@@ -1,36 +1,38 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api, { setAuthCookies } from "../services/api";
+import api from "../services/api";
 
 const LoginPage = ({ onLogin }) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const navigate = useNavigate();  // <-- Add this line
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     try {
-      const response = await api.post("/login/", { username, password });
+      const response = await api.post("/api/login/", { username, password });
       const { access, refresh } = response.data;
-      setAuthCookies(access, refresh);
 
-      onLogin();             // Update state in App.jsx
-      navigate("/menu");     // <-- Navigate to Main Menu page
+      document.cookie = `access=${access}; path=/`;
+      document.cookie = `refresh=${refresh}; path=/`;
+
+      onLogin();
+      navigate("/");
     } catch (error) {
       console.error("Login failed:", error);
-      setError("Invalid username or password");
+      setError(error.response?.data?.detail || "Invalid username or password");
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black text-white">
-      <div className="bg-black p-8 rounded shadow-lg w-96">
-        <h1 className="text-3xl mb-4">Login</h1>
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="h-screen w-screen flex items-center justify-center bg-black text-white">
+      <div className="bg-gray-900 p-8 rounded-xl shadow-lg w-full max-w-md">
+        <h1 className="text-3xl font-bold mb-6 text-center">Login</h1>
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-lg" htmlFor="username">
+            <label className="block text-lg font-semibold mb-2" htmlFor="username">
               Username
             </label>
             <input
@@ -38,12 +40,12 @@ const LoginPage = ({ onLogin }) => {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full p-2 mt-1 border border-white rounded bg-black text-white"
+              className="w-full p-3 border border-gray-700 rounded bg-black text-white focus:outline-none focus:ring-2 focus:ring-green-500"
               required
             />
           </div>
           <div>
-            <label className="block text-lg" htmlFor="password">
+            <label className="block text-lg font-semibold mb-2" htmlFor="password">
               Password
             </label>
             <input
@@ -51,18 +53,27 @@ const LoginPage = ({ onLogin }) => {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full p-2 mt-1 border border-white rounded bg-black text-white"
+              className="w-full p-3 border border-gray-700 rounded bg-black text-white focus:outline-none focus:ring-2 focus:ring-green-500"
               required
             />
           </div>
-          {error && <p className="text-red-500 text-sm">{error}</p>}
+          {error && <p className="text-red-500 text-sm text-center">{error}</p>}
           <button
             type="submit"
-            className="w-full p-2 mt-4 bg-green-500 text-white rounded hover:bg-green-700"
+            className="w-full p-3 bg-green-600 text-white rounded font-semibold hover:bg-green-700 transition"
           >
             Login
           </button>
         </form>
+        <p className="mt-4 text-center text-sm">
+          Don't have an account?{" "}
+          <button
+            onClick={() => navigate("/sign-up")}
+            className="text-green-400 hover:underline"
+          >
+            Sign up
+          </button>
+        </p>
       </div>
     </div>
   );

@@ -48,7 +48,7 @@ const ShiftSwapRequests = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center p-6">
+    <div className="h-screen w-screen flex flex-col items-center justify-center bg-black text-white overflow-hidden p-6">
       <h1 className="text-3xl font-bold mb-6">Shift Swap Requests</h1>
 
       <div className="w-full max-w-lg">
