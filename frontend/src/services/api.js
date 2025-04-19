@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const baseURL = import.meta.env.VITE_API_BASE_URL
+// Use the environment variable to set the base URL for your API
+const baseURL = import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:8000';
+console.log("Base URL:", baseURL);
 
 /**
  * Gets the cookie with the specified name, or null if not found.
@@ -17,15 +19,19 @@ function getCookie(name) {
  * @type {axios.AxiosInstance}
  */
 const api = axios.create({
-    baseURL,
-    withCredentials: true,
-});
+    baseURL: import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000",
+    withCredentials: true,   // ← send session cookie on every request
+  });
 
 api.interceptors.request.use(
     config => {
-        const access = getCookie('access');
+        const access = document.cookie
+            .split("; ")
+            .find(c => c.startsWith("access="))
+            ?.split("=")[1];
         if (access) {
-            config.headers['Authorization'] = `Bearer ${access}`;
+            config.headers = config.headers || {};
+            config.headers.Authorization = `Bearer ${access}`;
         }
         return config;
     },
@@ -61,6 +67,20 @@ api.interceptors.response.use(
 
         return Promise.reject(error);
     }
+);
+
+api.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.response?.status === 401) {
+      // clear stale JWT cookies
+      document.cookie = "access=; Max-Age=0; path=/";
+      document.cookie = "refresh=; Max-Age=0; path=/";
+      // redirect to login
+      window.location.href = "/sign-in";
+    }
+    return Promise.reject(error);
+  }
 );
 
 export default api;

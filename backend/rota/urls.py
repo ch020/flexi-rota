@@ -2,6 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 from .views import *
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rota.views import (logout_view)
 
 router = DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
@@ -33,5 +34,7 @@ urlpatterns = [
     path('messages/<int:message_id>/delete/', delete_message, name='delete_message'),
     path('shifts/auto-assign/', auto_assign_shifts, name='auto_assign_shifts'),
     path("users/change-password/", change_password, name="change-password"),
+    path("users/me/", current_user, name="current-user"),
     path('', include(router.urls)),
+    path("api/auto-assign-shifts/", auto_assign_shifts, name="auto-assign-shifts"),
 ]
