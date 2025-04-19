@@ -124,3 +124,37 @@
   border-radius: 6px;
   cursor: pointer;
 }
+
+.group-creator {
+  padding: 10px;
+  border: 1px solid #ddd;
+  margin-top: 10px;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+}
+
+.group-creator input[type="text"] {
+  width: 100%;
+  padding: 6px;
+  margin-bottom: 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.group-members {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+/* Different look for group chats in the list */
+.employee-list .group-chat {
+  background-color: #fff8e1; /* light yellow tone */
+  border-left: 4px solid #ffc107;
+}
+
+.employee-list .group-chat.selected {
+  background-color: #ffe082;
+  font-weight: bold;
+}
