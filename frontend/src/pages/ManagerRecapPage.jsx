@@ -138,11 +138,56 @@ const ManagerRecapPage = () => {
         <button onClick={() => setView('hourly')}>View Hourly Table</button>
         <button onClick={() => setView('weekly')}>View by Day</button>
       </div>
+
+      <GenerateInviteButton /> {/* 👈 Add this line here */}
+
       {view === 'hourly' ? (
         <HourlyView availabilityData={availabilityData} />
       ) : (
         <DaySelectorView availabilityData={availabilityData} />
       )}
+    </div>
+  );
+};
+
+// Invite generation button
+const GenerateInviteButton = () => {
+  const [inviteLink, setInviteLink] = useState('');
+  const [error, setError] = useState('');
+
+  const handleGenerateInvite = async () => {
+    try {
+      const response = await fetch('/api/generate-invite/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          // Include CSRF token if needed
+        },
+        credentials: 'include', // required for session auth with cookies
+      });
+
+      if (!response.ok) throw new Error('Failed to generate invite');
+
+      const data = await response.json();
+      setInviteLink(data.invite_link || ''); // Adjust this key if needed
+      setError('');
+    } catch (err) {
+      setInviteLink('');
+      setError('Could not generate invite link. Are you logged in as manager?');
+      console.error(err);
+    }
+  };
+
+  return (
+    <div style={{ textAlign: 'center', marginTop: '20px' }}>
+      <button onClick={handleGenerateInvite}>Generate Invite Link</button>
+      {inviteLink && (
+        <p>
+          Invite Link: <a href={inviteLink} target="_blank" rel="noopener noreferrer">{inviteLink}</a>
+        </p>
+      )}
+      {error && <p style={{ color: 'red' }}>{error}</p>}
     </div>
   );
 };
