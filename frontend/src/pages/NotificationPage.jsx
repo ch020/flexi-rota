@@ -4,15 +4,24 @@ import './NotificationPage.css'; // Import the CSS file
 const NotificationPage = () => {
     // Example notifications data
     const notifications = [
-        { id: 1, message: 'Your shift has been updated.', timestamp: '2023-10-01 10:00 AM', details: 'Your shift on October 5th has been changed to 2:00 PM - 10:00 PM. Please confirm your availability.' },
-        { id: 2, message: 'New training session scheduled.', timestamp: '2023-10-02 2:30 PM', details: 'A mandatory training session on food safety has been scheduled for October 10th at 3:00 PM in the main conference room.' },
-        { id: 3, message: 'Payroll processed.', timestamp: '2023-10-03 8:15 AM', details: 'Your payroll for the month of September has been processed and will be deposited into your account by October 5th.' },
+        { id: 1, message: 'Your shift has been updated.', timestamp: '2023-10-01 10:00 AM' },
+        { id: 2, message: 'New training session scheduled.', timestamp: '2023-10-02 2:30 PM' },
+        { id: 3, message: 'Payroll processed.', timestamp: '2023-10-03 8:15 AM' },
     ];
 
-    const [expandedNotificationId, setExpandedNotificationId] = useState(null);
+    const [readNotifications, setReadNotifications] = useState({});
 
-    const toggleNotification = (id) => {
-        setExpandedNotificationId((prevId) => (prevId === id ? null : id));
+    const toggleReadStatus = (id) => {
+        setReadNotifications((prevState) => ({
+            ...prevState,
+            [id]: !prevState[id],
+        }));
+    };
+
+    const [highlightedNotificationId, setHighlightedNotificationId] = useState(null);
+
+    const toggleNotificationHighlight = (id) => {
+        setHighlightedNotificationId((prevId) => (prevId === id ? null : id));
     };
 
     return (
@@ -24,16 +33,20 @@ const NotificationPage = () => {
                         <li
                             key={notification.id}
                             className="notification-item"
-                            onClick={() => toggleNotification(notification.id)}
-                            style={{ cursor: 'pointer' }}
+                            onClick={() => toggleNotificationHighlight(notification.id)}
+                            style={{
+                                cursor: 'pointer',
+                                backgroundColor: highlightedNotificationId === notification.id ? 'lightblue' : 'transparent',
+                            }}
                         >
+                            <input
+                                type="checkbox"
+                                checked={!!readNotifications[notification.id]}
+                                onChange={() => toggleReadStatus(notification.id)}
+                                style={{ marginRight: '10px' }}
+                            />
                             <p className="notification-message">{notification.message}</p>
                             <span className="notification-timestamp">{notification.timestamp}</span>
-                            <div>
-                                {expandedNotificationId === notification.id && (
-                                    <p className="notification-details">{notification.details}</p>
-                                )}
-                            </div>
                         </li>
                     ))}
                 </ul>
