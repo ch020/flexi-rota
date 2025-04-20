@@ -22,12 +22,6 @@ staticfiles/
 .idea/
 
 # --- Node / React (Vite) ---
-frontend/node_modules/
-frontend/dist/
-frontend/.vite/
-frontend/.env
-frontend/.env.*
-frontend/
 
 # --- OS-specific ---
 Thumbs.db
