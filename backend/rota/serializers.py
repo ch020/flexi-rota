@@ -20,7 +20,7 @@ class BasicUserSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     # accept a role’s ID on write
     role_title = serializers.PrimaryKeyRelatedField(
-        queryset=Role.objects.all(),
+        queryset=Role.objects.none(),
         allow_null=True,
         required=False
     )
@@ -28,6 +28,12 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('id', 'username', 'email', 'role', 'role_title', 'first_name', 'last_name', 'phone_number', 'pay_rate')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get('request')
+        if request and hasattr(request.user, 'organisation'):
+            self.fields['role_title'].queryset = Role.objects.filter(organisation=request.user.organisation)
 
     def to_representation(self, instance):
         rep = super().to_representation(instance)
@@ -226,6 +232,15 @@ class ChangePasswordSerializer(serializers.Serializer):
 
 class InviteLinkResponseSerializer(serializers.Serializer):
     invite_url = serializers.URLField()
+
+class InviteGenerationRequestSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(
+        choices=[("manager", "Manager"), ("employee", "Employee")],
+        help_text="Role to assign to the invited user. Must be either 'manager' or 'employee'.",
+    )
+
+    class Meta:
+        ref_name = "InviteGenerationRequest"
 
 class LogoutRequestSerializer(serializers.Serializer):
     refresh = serializers.CharField(required=True)

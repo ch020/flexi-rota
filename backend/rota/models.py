@@ -99,8 +99,18 @@ class Shift(models.Model):
 
     def clean(self):
         # Ensure that the end time is after the start time
+        super().clean()
         if self.end_time <= self.start_time:
             raise ValidationError("End time must be after start time.")
+
+        overlapping = Shift.objects.filter(
+            employee=self.employee,
+            start_time__lt=self.end_time,
+            end_time__gt=self.start_time
+        ).exclude(id=self.id)
+
+        if overlapping.exists():
+            raise ValidationError("Shift overlaps with another shift for the same employee.")
 
     def __str__(self):
         return f"{self.employee.username}'s shift starts at {self.start_time} to {self.end_time} and is managed by {self.manager.username}"
