@@ -73,7 +73,6 @@ const useEmployeeAvailability = () => {
 };
 
 // 3) By Day View logic lives in ManagerRecapPage below
-
 // 4) Manage Roles View
 const ManageRolesView = () => {
   const [roles, setRoles]       = useState([]);
