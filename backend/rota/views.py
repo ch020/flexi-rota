@@ -287,7 +287,7 @@ This endpoint is typically used for onboarding new team members while ensuring t
     },
     tags=["Users"]
 )
-@api_view(['GET'])
+@api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def generate_invite(request):
     if request.user.role != 'manager':
