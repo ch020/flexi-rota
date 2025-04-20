@@ -18,11 +18,16 @@ class BasicUserSerializer(serializers.ModelSerializer):
         fields = ['id', 'username', 'role_title', 'first_name', 'last_name']
 
 class UserSerializer(serializers.ModelSerializer):
-    role_title = RoleSerializer()
+    # accept a role’s ID on write
+    role_title = serializers.PrimaryKeyRelatedField(
+        queryset=Role.objects.all(),
+        allow_null=True,
+        required=False
+    )
 
     class Meta:
         model = User
-        fields = ('id', 'username', 'email', 'role','role_title', 'first_name', 'last_name', 'phone_number', 'pay_rate')
+        fields = ('id', 'username', 'email', 'role', 'role_title', 'first_name', 'last_name', 'phone_number', 'pay_rate')
 
     def to_representation(self, instance):
         rep = super().to_representation(instance)

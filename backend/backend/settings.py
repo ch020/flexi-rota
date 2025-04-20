@@ -131,7 +131,10 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-CORS_ALLOW_ALL_ORIGINS = True  # TODO: Remove for production
+# CORS_ALLOW_ALL_ORIGINS = True  # TODO: Remove for production
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173"]
+CORS_ALLOW_CREDENTIALS = True
 
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
@@ -139,6 +142,10 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     )
 }
+
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+]
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'FlexiRota API',

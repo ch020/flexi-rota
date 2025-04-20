@@ -4,7 +4,9 @@ from collections import defaultdict
 from datetime import datetime
 from statistics import stdev, mean
 from typing import cast
-
+from django.db import IntegrityError
+from datetime import timedelta
+from django.utils import timezone
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from drf_spectacular.types import OpenApiTypes
@@ -104,7 +106,7 @@ class ShiftTemplateViewSet(viewsets.ModelViewSet):
     responses={200: UserSerializer(many=True)},
     tags=["Users"]
 )
-class UserViewSet(viewsets.ReadOnlyModelViewSet):
+class UserViewSet(viewsets.ModelViewSet):              # ← allow PATCH
     queryset = User.objects.none()
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated]
@@ -114,6 +116,12 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
         if user.role == 'manager':
             return User.objects.filter(organisation=user.organisation)
         return User.objects.filter(id=user.id)
+
+    def partial_update(self, request, *args, **kwargs):
+        # only managers can change other users’ roles
+        if request.user.role != 'manager':
+            return Response({"detail": "Only managers can change roles."}, status=403)
+        return super().partial_update(request, *args, **kwargs)
 
 @extend_schema(
     summary="CRUD operations on availability",
@@ -181,7 +189,8 @@ class AvailabilityViewSet(viewsets.ModelViewSet):
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = RegisterSerializer
-    permission_classes = [AllowAny]
+    authentication_classes = []      # ← disable JWT/session auth here
+    permission_classes     = [AllowAny]  # ← allow anyone to register
 
 # TEST CLASSES
 
@@ -234,45 +243,37 @@ def logout_view(request):
 # INVITE LINK CLASSES
 @extend_schema(
     summary="Generate an invite link",
-    description="Generates a time-limited (3 days) invite link for a manager or employee to join your organisation.",
+    description="Generates a time‑limited (3 days) invite link for a manager or employee to join your organisation.",
     request=OpenApiTypes.OBJECT,
     examples=[
-        OpenApiExample(
-            "Generate employee invite",
-            value={"role": "employee"},
-            request_only=True
-        ),
-        OpenApiExample(
-            "Generate manager invite",
-            value={"role": "manager"},
-            request_only=True
-        )
+      OpenApiExample("Employee", value={"role": "employee"}, request_only=True),
+      OpenApiExample("Manager",  value={"role": "manager"},  request_only=True),
     ],
     responses={
-        201: OpenApiResponse(InviteLinkResponseSerializer, description="Invite link created"),
-        403: OpenApiResponse(description='Only managers can generate invites')
+      201: OpenApiResponse(InviteLinkResponseSerializer, description="Invite created"),
+      403: OpenApiResponse(description="Only managers can generate invites")
     },
     tags=["Users"]
 )
-@api_view(['POST'])
+@api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def generate_invite(request):
     if request.user.role != 'manager':
         return Response({"detail": "Only managers can generate invites"}, status=403)
 
-    role = request.data.get("role")
-    token = secrets.token_urlsafe(16)
-    expiry = timezone.now() + timedelta(days=3)
+    token      = secrets.token_urlsafe(16)
+    expires_at = timezone.now() + timedelta(days=3)
 
-    InviteToken.objects.create(
-        organisation=request.user.organisation,
-        token=token,
-        expires_at=expiry,
-        role=role,
-    )
+    try:
+        InviteToken.objects.create(
+            organisation=request.user.organisation,
+            token=token,
+            expires_at=expires_at,
+        )
+    except IntegrityError as e:
+        return Response({"detail": str(e)}, status=400)
 
-    invite_url = settings.BACKEND_URL + f"register/?invite={token}"
-    return Response({"invite_url": invite_url}, status=201)
+    return Response({"invite_url": settings.BACKEND_URL + f"register/?invite={token}"}, status=201)
 
 #SHIFT CLASSES
 @extend_schema(
@@ -381,7 +382,7 @@ def send_notification(request):
         users = User.objects.filter(organisation=request.user.organisation)
     else:
         users = User.objects.filter(id__in=data['recipients'])
-        role_users = User.objects.filter(role_title__id__in=data['roles'], organisation=request.user.organisation)
+        role_users = User.objects.filter(role_title__id__in(data['roles'], organisation=request.user.organisation))
         users |= role_users
 
     users = users.distinct()
@@ -961,3 +962,9 @@ def change_password(request):
     user.set_password(new_password)
     user.save()
     return Response({"detail": "Password changed successfully."}, status=200)
+
+@api_view(['GET']) #newly added to return the current user
+@permission_classes([IsAuthenticated])
+def current_user(request):
+    serializer = UserSerializer(request.user)
+    return Response(serializer.data)

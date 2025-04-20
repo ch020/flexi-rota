@@ -4,6 +4,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
 from django.core.validators import RegexValidator
+from django.core.exceptions import ValidationError
 
 ROLE_CHOICES = (
         ('manager', 'Manager'),
@@ -95,6 +96,11 @@ class Shift(models.Model):
     end_time = models.DateTimeField(default=default_end_time)
     is_swap_requested = models.BooleanField(default=False)
     swap_approved = models.BooleanField(default=False)
+
+    def clean(self):
+        # Ensure that the end time is after the start time
+        if self.end_time <= self.start_time:
+            raise ValidationError("End time must be after start time.")
 
     def __str__(self):
         return f"{self.employee.username}'s shift starts at {self.start_time} to {self.end_time} and is managed by {self.manager.username}"
