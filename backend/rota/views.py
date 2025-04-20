@@ -243,14 +243,46 @@ def logout_view(request):
 # INVITE LINK CLASSES
 @extend_schema(
     summary="Generate an invite link",
-    description="Generates a time‑limited (3 days) invite link for a manager or employee to join your organisation.",
-    request=OpenApiTypes.OBJECT,
+    description="""
+Generates a unique invite link allowing a new user to register and join the authenticated manager's organisation.  
+Only users with the `manager` role can access this endpoint.
+
+The generated invite is valid for 3 days and is tied to the manager’s organisation.  
+The `role` parameter determines whether the invited user will be a `manager` or an `employee`.
+
+This endpoint is typically used for onboarding new team members while ensuring that only authorized managers can control access to their organisation.
+
+### Request Body
+- `role`: `"employee"` or `"manager"`  
+  Determines the role assigned to the user when they sign up using the invite link.
+
+### Behavior
+- Requires authentication (`JWT`).
+- Returns a unique `invite_url` for the frontend to distribute.
+- Automatically sets the correct `organisation` and `role` for the invited user.
+- Invite expires in 72 hours.
+
+### Notes
+- If no role is specified or an invalid role is passed, the server will still attempt to store it—consider adding input validation if needed.
+- This endpoint does not currently validate the input role field against a strict set (`employee`, `manager`).
+    """,
+    request=InviteGenerationRequestSerializer,
     examples=[
-      OpenApiExample("Employee", value={"role": "employee"}, request_only=True),
-      OpenApiExample("Manager",  value={"role": "manager"},  request_only=True),
+        OpenApiExample(
+            "Generate employee invite",
+            value={"role": "employee"},
+            request_only=True,
+            description="Creates a link allowing an employee to register under the manager’s organisation."
+        ),
+        OpenApiExample(
+            "Generate manager invite",
+            value={"role": "manager"},
+            request_only=True,
+            description="Creates a link for another manager to join the organisation."
+        )
     ],
     responses={
-      201: OpenApiResponse(InviteLinkResponseSerializer, description="Invite created"),
+      201: OpenApiResponse(InviteLinkResponseSerializer, description="Invite link created"),
       403: OpenApiResponse(description="Only managers can generate invites")
     },
     tags=["Users"]
@@ -261,19 +293,21 @@ def generate_invite(request):
     if request.user.role != 'manager':
         return Response({"detail": "Only managers can generate invites"}, status=403)
 
+    serializer = InviteGenerationRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    role = serializer.validated_data.get('role', 'employee')
     token      = secrets.token_urlsafe(16)
     expires_at = timezone.now() + timedelta(days=3)
 
-    try:
-        InviteToken.objects.create(
-            organisation=request.user.organisation,
-            token=token,
-            expires_at=expires_at,
-        )
-    except IntegrityError as e:
-        return Response({"detail": str(e)}, status=400)
-
-    return Response({"invite_url": settings.BACKEND_URL + f"register/?invite={token}"}, status=201)
+    InviteToken.objects.create(
+        organisation=request.user.organisation,
+        role=role,
+        token=token,
+        expires_at=expires_at,
+    )
+    invite_url = settings.BACKEND_URL + f"api/register/?invite={token}"
+    return Response({"invite_url": invite_url}, status=201)
 
 #SHIFT CLASSES
 @extend_schema(
@@ -963,6 +997,51 @@ def change_password(request):
     user.save()
     return Response({"detail": "Password changed successfully."}, status=200)
 
+@extend_schema(
+    summary="Get current authenticated user",
+    description="""
+Returns the authenticated user's full profile, including username, email, role, role title, contact information, and pay rate.
+
+This endpoint is useful for pre-filling forms or displaying the current user's settings and details in your frontend application.
+
+**Authentication is required.**
+""",
+    responses={
+        200: OpenApiResponse(
+            response=UserSerializer,
+            description="Authenticated user's information",
+            examples=[
+                OpenApiExample(
+                    name="Successful Response",
+                    value={
+                        "id": 12,
+                        "username": "jdoe",
+                        "email": "jdoe@example.com",
+                        "role": "employee",
+                        "role_title": 5,
+                        "first_name": "John",
+                        "last_name": "Doe",
+                        "phone_number": "+447123456789",
+                        "pay_rate": "12.50",
+                        "full_name": "John Doe"
+                    },
+                    response_only=True
+                )
+            ]
+        ),
+        401: OpenApiResponse(
+            description="Unauthorized – user is not authenticated",
+            examples=[
+                OpenApiExample(
+                    name="No Credentials",
+                    value={"detail": "Authentication credentials were not provided."},
+                    response_only=True
+                )
+            ]
+        )
+    },
+    tags=["Users"]
+)
 @api_view(['GET']) #newly added to return the current user
 @permission_classes([IsAuthenticated])
 def current_user(request):

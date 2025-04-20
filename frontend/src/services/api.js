@@ -51,7 +51,7 @@ api.interceptors.response.use(
             originalRequest._retry = true;
 
             try {
-                const res = await axios.post(`${baseURL}token/refresh/`, {
+                const res = await axios.post(`${baseURL}/api/token/refresh/`, {
                     refresh: getCookie('refresh'),
                 });
 
@@ -60,9 +60,14 @@ api.interceptors.response.use(
 
                 originalRequest.headers['Authorization'] = `Bearer ${newAccess}`;
                 return api(originalRequest);
-            } catch (error) {
-                console.error('Token refresh failed: ', error);
+            } catch (refreshError){
+                console.error('Token refresh failed:', refreshError);
             }
+        }
+
+        if (error.response?.status === 401) {
+            clearAuthCookies();
+            window.location.href = "/sign-in";
         }
 
         return Promise.reject(error);

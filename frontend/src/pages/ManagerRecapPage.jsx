@@ -73,7 +73,6 @@ const useEmployeeAvailability = () => {
 };
 
 // 3) By Day View logic lives in ManagerRecapPage below
-
 // 4) Manage Roles View
 const ManageRolesView = () => {
   const [roles, setRoles]       = useState([]);
@@ -194,6 +193,73 @@ const InviteView = () => {
   );
 };
 
+const FairnessAnalyticsView = () => {
+  const [analytics, setAnalytics] = useState(null);
+  const [loading, setLoading]     = useState(true);
+
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      try {
+        const res = await api.get("/api/analytics/fairness/");
+        setAnalytics(res.data);
+      } catch (err) {
+        console.error("Failed to load fairness analytics:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAnalytics();
+  }, []);
+
+  if (loading) return <p className="text-white">Loading analytics...</p>;
+
+  if (!analytics) return <p className="text-red-400">Failed to load data.</p>;
+
+  return (
+    <div className="bg-gray-900 p-6 rounded-lg shadow text-white">
+      <h2 className="text-2xl font-semibold mb-4">Fairness Overview</h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
+        <div className="bg-gray-800 p-4 rounded">
+          <p className="text-gray-400">Total Employees</p>
+          <p className="text-3xl">{analytics.total_employees}</p>
+        </div>
+        <div className="bg-gray-800 p-4 rounded">
+          <p className="text-gray-400">Average Shifts</p>
+          <p className="text-3xl">{analytics.average_shifts}</p>
+        </div>
+        <div className="bg-gray-800 p-4 rounded">
+          <p className="text-gray-400">Fairness Score</p>
+          <p className="text-3xl">{analytics.fairness_score}</p>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full table-auto border-collapse border border-gray-700">
+          <thead>
+            <tr className="bg-gray-800 text-gray-300">
+              <th className="p-2 border border-gray-700">Employee</th>
+              <th className="p-2 border border-gray-700">Shifts</th>
+              <th className="p-2 border border-gray-700">Weekly Hours</th>
+            </tr>
+          </thead>
+          <tbody>
+            {analytics.shift_distribution.map((emp, idx) => (
+              <tr key={idx} className="hover:bg-gray-800">
+                <td className="p-2 border border-gray-700">{emp.employee.full_name || emp.employee.username}</td>
+                <td className="p-2 border border-gray-700">{emp.shifts}</td>
+                <td className="p-2 border border-gray-700">
+                  {Object.entries(emp.weekly_hours).map(([week, hours]) => (
+                    <div key={week}>{week}: {hours.toFixed(2)}h</div>
+                  ))}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 // 6) Create & Assign Shifts View
 const AssignShiftsView = () => {
   const [start, setStart]     = useState("");
@@ -325,7 +391,7 @@ export default function ManagerRecapPage() {
         <h1 className="text-3xl font-bold mb-6">Manager Dashboard</h1>
 
         <div className="flex space-x-4 mb-6">
-          {["day","roles","invite","assign"].map(v => (
+          {["day","roles","invite","assign", "fairness"].map(v => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -338,7 +404,8 @@ export default function ManagerRecapPage() {
               {v==="day"     ? "By Day"
               : v==="roles"   ? "Manage Roles"
               : v==="invite"  ? "Invite"
-              : /* v==="assign" */  "Assign Shifts"}
+              : v==="assign" ?  "Assign Shifts"
+              : "Fairness Analytics"}
             </button>
           ))}
         </div>
@@ -388,6 +455,8 @@ export default function ManagerRecapPage() {
         {view === "invite" && <InviteView />}
 
         {view === "assign" && <AssignShiftsView />}
+
+        {view === "fairness" && <FairnessAnalyticsView />}
       </div>
     </div>
   );
