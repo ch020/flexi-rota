@@ -74,20 +74,6 @@ api.interceptors.response.use(
     }
 );
 
-api.interceptors.response.use(
-  response => response,
-  error => {
-    if (error.response?.status === 401) {
-      // clear stale JWT cookies
-      document.cookie = "access=; Max-Age=0; path=/";
-      document.cookie = "refresh=; Max-Age=0; path=/";
-      // redirect to login
-      window.location.href = "/sign-in";
-    }
-    return Promise.reject(error);
-  }
-);
-
 export default api;
 
 /**
