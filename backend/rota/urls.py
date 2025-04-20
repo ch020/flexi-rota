@@ -53,5 +53,4 @@ urlpatterns = [
 
     # ROUTER
     path('', include(router.urls)),
-    path("api/auto-assign-shifts/", auto_assign_shifts, name="auto-assign-shifts"),
 ]
