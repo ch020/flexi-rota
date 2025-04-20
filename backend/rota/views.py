@@ -416,7 +416,7 @@ def send_notification(request):
         users = User.objects.filter(organisation=request.user.organisation)
     else:
         users = User.objects.filter(id__in=data['recipients'])
-        role_users = User.objects.filter(role_title__id__in(data['roles'], organisation=request.user.organisation))
+        role_users = User.objects.filter(role_title__id__in=data['roles'], organisation=request.user.organisation)
         users |= role_users
 
     users = users.distinct()
