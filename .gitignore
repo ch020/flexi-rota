@@ -27,7 +27,6 @@ frontend/dist/
 frontend/.vite/
 frontend/.env
 frontend/.env.*
-frontend/
 
 # --- OS-specific ---
 Thumbs.db
