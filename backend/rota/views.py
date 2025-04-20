@@ -997,6 +997,51 @@ def change_password(request):
     user.save()
     return Response({"detail": "Password changed successfully."}, status=200)
 
+@extend_schema(
+    summary="Get current authenticated user",
+    description="""
+Returns the authenticated user's full profile, including username, email, role, role title, contact information, and pay rate.
+
+This endpoint is useful for pre-filling forms or displaying the current user's settings and details in your frontend application.
+
+**Authentication is required.**
+""",
+    responses={
+        200: OpenApiResponse(
+            response=UserSerializer,
+            description="Authenticated user's information",
+            examples=[
+                OpenApiExample(
+                    name="Successful Response",
+                    value={
+                        "id": 12,
+                        "username": "jdoe",
+                        "email": "jdoe@example.com",
+                        "role": "employee",
+                        "role_title": 5,
+                        "first_name": "John",
+                        "last_name": "Doe",
+                        "phone_number": "+447123456789",
+                        "pay_rate": "12.50",
+                        "full_name": "John Doe"
+                    },
+                    response_only=True
+                )
+            ]
+        ),
+        401: OpenApiResponse(
+            description="Unauthorized – user is not authenticated",
+            examples=[
+                OpenApiExample(
+                    name="No Credentials",
+                    value={"detail": "Authentication credentials were not provided."},
+                    response_only=True
+                )
+            ]
+        )
+    },
+    tags=["Users"]
+)
 @api_view(['GET']) #newly added to return the current user
 @permission_classes([IsAuthenticated])
 def current_user(request):
