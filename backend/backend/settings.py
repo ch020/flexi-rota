@@ -23,12 +23,10 @@ load_dotenv(dotenv_path=BASE_DIR / '.env')
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-hp^m+xo3bs84sx14_1e0wovhq6q8ni2(o73e61#0i_-82)b%z_'
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
+DEBUG = os.getenv('DJANGO_DEBUG', "False").lower() in ("true", "1")
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",")
 
 
 # Application definition
@@ -133,7 +131,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS_ALLOW_ALL_ORIGINS = True  # TODO: Remove for production
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173"]
+    "http://localhost:5173", "https://flexirota.netlify.app/"]
 CORS_ALLOW_CREDENTIALS = True
 
 REST_FRAMEWORK = {
@@ -169,3 +167,9 @@ SPECTACULAR_SETTINGS = {
 AUTH_USER_MODEL = 'rota.User'
 
 BACKEND_URL = os.getenv('BACKEND_URL', 'http://localhost:8000/')  # NEEDS TO BE SET IN .ENV FILE IN backend/
+
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_SSL_REDIRECT = True  # Optional, if you're using HTTPS
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
