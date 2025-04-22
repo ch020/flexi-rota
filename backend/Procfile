@@ -1,0 +1,2 @@
+release: python manage.py migrate && python create_admin.py
+web: gunicorn backend.wsgi:application
