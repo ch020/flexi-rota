@@ -20,9 +20,11 @@ const LoginPage = ({ onLogin }) => {
       const response = await api.post("/api/login/", { username, password });
       const { access, refresh } = response.data;
 
-      setAuthCookies(access, refresh);
-      await onLogin();
-      navigate("/"); // this is a test
+      if (access && refresh) {
+        setAuthCookies(access, refresh);
+        await onLogin();
+        navigate("/");
+      }
     } catch (error) {
       console.error("Login failed:", error);
       setError(error.response?.data?.detail || "Invalid username or password");
