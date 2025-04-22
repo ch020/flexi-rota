@@ -131,7 +131,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS_ALLOW_ALL_ORIGINS = True  # TODO: Remove for production
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173", "https://flexirota.netlify.app/"]
+    "http://localhost:5173", "https://flexirota.netlify.app"]
 CORS_ALLOW_CREDENTIALS = True
 
 REST_FRAMEWORK = {
