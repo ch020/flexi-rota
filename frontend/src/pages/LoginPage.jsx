@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, {useEffect, useState} from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../services/api";
+import api, {setAuthCookies, clearAuthCookies} from "../services/api";
 
 const LoginPage = ({ onLogin }) => {
   const [username, setUsername] = useState("");
@@ -8,17 +8,20 @@ const LoginPage = ({ onLogin }) => {
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
+  useEffect(() => {
+    clearAuthCookies();
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
 
     try {
       const response = await api.post("/api/login/", { username, password });
       const { access, refresh } = response.data;
 
-      document.cookie = `access=${access}; path=/`;
-      document.cookie = `refresh=${refresh}; path=/`;
-
-      onLogin();
+      setAuthCookies(access, refresh);
+      await onLogin();
       navigate("/"); // this is a test
     } catch (error) {
       console.error("Login failed:", error);
