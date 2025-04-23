@@ -29,8 +29,8 @@ const LoginPage = ({ onLogin }) => {
       navigate("/");
     } catch (error) {
       console.error("Login failed:", error);
-      clearAuthCookies();
       setError(error.response?.data?.detail || "Invalid username or password");
+      clearAuthCookies();
     }
   };
 

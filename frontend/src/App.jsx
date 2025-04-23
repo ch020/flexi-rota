@@ -9,7 +9,7 @@ import EmployeeDashboard from "./pages/EmployeeDashboard";
 import ShiftSwapRequests from "./pages/ShiftSwapRequests";
 import ManagerRecapPage from "./pages/ManagerRecapPage";
 import ChatPage from "./pages/Chat";
-import api from "./services/api";
+import api, {clearAuthCookies} from "./services/api";
 import "./index.css";    // or wherever your global styles live
 
 function App() {
@@ -29,7 +29,16 @@ function App() {
       .find((c) => c.startsWith("access="))
       ?.split("=")[1];
     if (access) {
-      setIsLoggedIn(true);
+      api.get("/api/users/me/")
+          .then((res) => {
+            setIsLoggedIn(true);
+            setUserRole(res.data.role);
+          })
+          .catch(() => {
+            clearAuthCookies();
+            setIsLoggedIn(false);
+            setUserRole(null);
+          })
     }
   }, []);
 
