@@ -20,13 +20,16 @@ const LoginPage = ({ onLogin }) => {
       const response = await api.post("/api/login/", { username, password });
       const { access, refresh } = response.data;
 
-      if (access && refresh) {
-        setAuthCookies(access, refresh);
-        await onLogin();
-        navigate("/");
+      if (!access || !refresh) {
+        throw new Error("Missing token.");
       }
+
+      setAuthCookies(access, refresh);
+      await onLogin();
+      navigate("/");
     } catch (error) {
       console.error("Login failed:", error);
+      clearAuthCookies();
       setError(error.response?.data?.detail || "Invalid username or password");
     }
   };
