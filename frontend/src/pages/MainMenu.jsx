@@ -4,6 +4,7 @@ import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import "../assets/Calendar.css"; // Import the custom calendar styles
 import api from "../services/api";
+import NotificationBell from "../assets/NotificationBell";
 
 const MainMenu = ({ onLogout }) => {
   const navigate = useNavigate();
@@ -65,8 +66,17 @@ const MainMenu = ({ onLogout }) => {
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col items-center justify-center bg-black text-white overflow-hidden p-6">
-      <h1 className="text-4xl font-bold mb-8">Flexi-rota</h1>
+    <div className="relative h-screen w-screen flex flex-col items-center justify-center bg-black text-white overflow-hidden p-6">
+      {/* Bell in top‑right */}
+      <div className="absolute top-4 right-6">
+        <NotificationBell />
+      </div>
+
+      <img
+        src="https://i.ibb.co/whSvHbGj/Whats-App-Image-2025-03-20-at-13-00-26-4a5665d4-enhanced-removebg-preview.png"
+        alt="Flexi‑Rota Logo"
+        className="h-16 w-auto mb-8"
+      />
 
       <div className="flex flex-col items-center w-full max-w-lg space-y-6">
         <Calendar
@@ -90,6 +100,13 @@ const MainMenu = ({ onLogout }) => {
             className="bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-semibold transition"
           >
             Set Availability
+          </button>
+
+          <button
+            onClick={() => navigate("/chat")}
+            className="bg-gray-600 hover:bg-gray-700 text-white py-3 rounded-xl font-semibold transition"
+          >
+            Chat
           </button>
 
           <button

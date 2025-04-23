@@ -8,6 +8,7 @@ import AvailabilityPage from "./pages/AvailabilityPage";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
 import ShiftSwapRequests from "./pages/ShiftSwapRequests";
 import ManagerRecapPage from "./pages/ManagerRecapPage";
+import ChatPage from "./pages/Chat";
 import api from "./services/api";
 import "./index.css";    // or wherever your global styles live
 
@@ -123,6 +124,12 @@ function App() {
           <Route
             path="/shift-swaps"
             element={isLoggedIn ? <ShiftSwapRequests /> : <Navigate to="/sign-in" />}
+          />
+
+          {/* chat */}
+          <Route
+            path="/chat"
+            element={isLoggedIn ? <ChatPage /> : <Navigate to="/sign-in" />}
           />
 
           {/* fallback */}

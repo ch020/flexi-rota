@@ -2,6 +2,7 @@ from django.contrib.auth.password_validation import validate_password
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
+from django.utils import timezone
 
 from .models import *
 
@@ -41,46 +42,90 @@ class UserSerializer(serializers.ModelSerializer):
         return rep
 
 class RegisterSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(required=True, validators=[UniqueValidator(queryset=User.objects.all())])
-    password = serializers.CharField(required=True, write_only=True, validators=[validate_password])
-    password2 = serializers.CharField(style={'input_type': 'password'}, write_only=True, required=True)
+    email = serializers.EmailField(
+        required=True,
+        validators=[UniqueValidator(queryset=User.objects.all())]
+    )
+    password = serializers.CharField(
+        write_only=True,
+        required=True,
+        validators=[validate_password]
+    )
+    password2 = serializers.CharField(
+        write_only=True,
+        required=True
+    )
 
     class Meta:
         model = User
-        fields = ('username', 'email', 'password', 'password2', 'role', 'first_name', 'last_name', 'phone_number', 'pay_rate')
+        fields = (
+            'username',
+            'email',
+            'password',
+            'password2',
+            'first_name',
+            'last_name',
+            'phone_number',
+            'pay_rate',
+            'role',           # Will be set from invite if present
+        )
+        extra_kwargs = {
+            'role': {'read_only': True}
+        }
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
-            raise serializers.ValidationError({"password": "Password fields didn't match."})
+            raise serializers.ValidationError({
+                'password': "Password fields didn't match."
+            })
         return attrs
 
     def create(self, validated_data):
-        invite_token = self.context['request'].query_params.get('invite')
+        # pull invite token from URL
+        request = self.context['request']
+        invite_token = request.query_params.get('invite')
 
+        # drop password2, extract password
         validated_data.pop('password2')
-        password = validated_data.pop('password')
+        raw_password = validated_data.pop('password')
 
+        # build user instance without saving
         user = User(**validated_data)
 
         if invite_token:
+            # one‑time invite: fetch and consume
             try:
-                invite = InviteToken.objects.get(token=invite_token, expires_at__gt=timezone.now())
-                user.organisation = invite.organisation
-                user.role = invite.role
+                inv = InviteToken.objects.get(
+                    token=invite_token,
+                    expires_at__gt=timezone.now()
+                )
             except InviteToken.DoesNotExist:
-                raise serializers.ValidationError({"invite": "Invalid or expired invite link"})
+                raise serializers.ValidationError({
+                    'invite': "Invalid or expired invite link."
+                })
+            # apply invite’s organisation & role
+            user.organisation = inv.organisation
+            user.role         = inv.role
+            inv.delete()
         else:
-            if validated_data["role"] != "manager":
-                raise serializers.ValidationError({"invite": "Only managers can sign-up without an invite link. Please contact an administrator for an invite link."})
+            # no invite → only allow manager self‑sign‑up
+            if user.role != 'manager':
+                raise serializers.ValidationError({
+                    'invite': "Only managers may sign up without an invite link."
+                })
 
-        user.set_password(password)
+        # set & hash password, then save
+        user.set_password(raw_password)
         user.save()
         return user
 
 class AvailabilitySerializer(serializers.ModelSerializer):
+    # expose the user ID so front‑end can filter per employee
+    user = serializers.PrimaryKeyRelatedField(read_only=True)
+
     class Meta:
         model = Availability
-        exclude = ['user']
+        fields = ['id', 'user', 'start_time', 'end_time']
 
     def validate(self, data):
         start = data.get('start_time')
