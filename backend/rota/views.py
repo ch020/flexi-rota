@@ -223,9 +223,9 @@ class RegisterView(generics.CreateAPIView):
 
         # inject role/org into the incoming data
         data = request.data.copy()
-        data["role"] = role
         if org:
             data["organisation"] = org.pk
+            data["role"] = role
 
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
