@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../services/api";
+import api, {setAuthCookies} from "../services/api";
 
 const SignupPage = ({ onSignup, invite }) => {
   const [firstName, setFirstName] = useState("");
@@ -32,12 +32,12 @@ const SignupPage = ({ onSignup, invite }) => {
         password2: confirm,
         role: "employee"        // backend will override if invite.role==="manager"
       });
-      const { access, refresh } = res.data;
-      document.cookie = `access=${access}; path=/`;
-      document.cookie = `refresh=${refresh}; path=/`;
-
-      onSignup();
-      navigate("/");
+      const { access, refresh } = res.data || {};
+      if (access && refresh) {
+        setAuthCookies(access, refresh);
+        onSignup();
+        navigate("/");
+      }
     } catch (err) {
       setError(err.response?.data?.detail || "Registration failed");
     }

@@ -236,7 +236,13 @@ class RegisterView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        refresh = RefreshToken.for_user(user)
+        res_data = {
+            "access": str(refresh.access_token),
+            "refresh": str(refresh),
+            "role": user.role,
+        }
+        return Response(res_data, status=status.HTTP_201_CREATED, headers=headers)
 
 # TEST CLASSES
 
