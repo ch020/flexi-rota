@@ -4,24 +4,20 @@ from collections import defaultdict
 from datetime import datetime
 from statistics import stdev, mean
 from typing import cast
-from django.db import IntegrityError
-from datetime import timedelta
-from django.utils import timezone
+
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
+from django.shortcuts import get_object_or_404
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter, OpenApiExample
+from rest_framework import status
 from rest_framework import viewsets, generics
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
-from rest_framework.response import Response
-from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.shortcuts import get_object_or_404
 
 from .serializers import *
-from .models import ShiftTemplate, Shift, User, Availability, Notification, NotificationReadStatus
 
 
 @extend_schema(
@@ -31,7 +27,6 @@ from .models import ShiftTemplate, Shift, User, Availability, Notification, Noti
     tags=["Roles"]
 )
 class RoleViewSet(viewsets.ModelViewSet):
-    queryset = Role.objects.none()
     serializer_class = RoleSerializer
     permission_classes = [IsAuthenticated]
 
@@ -57,7 +52,6 @@ class RoleViewSet(viewsets.ModelViewSet):
     tags=["Shifts"]
 )
 class ShiftTemplateViewSet(viewsets.ModelViewSet):
-    queryset = ShiftTemplate.objects.none()
     serializer_class = ShiftTemplateSerializer
     permission_classes = [IsAuthenticated]
 
@@ -129,7 +123,8 @@ class UserViewSet(viewsets.ModelViewSet):              # ← allow PATCH
     def partial_update(self, request, *args, **kwargs):
         # only managers can change other users’ roles
         if request.user.role != 'manager':
-            return Response({"detail": "Only managers can change roles."}, status=403)
+            if request.user.id != kwargs['pk']:
+                return Response({"detail": "Only managers can change other users."}, status=403)
         return super().partial_update(request, *args, **kwargs)
 
 @extend_schema(
@@ -234,15 +229,10 @@ class RegisterView(generics.CreateAPIView):
 
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()
+        serializer.save()
         headers = self.get_success_headers(serializer.data)
-        refresh = RefreshToken.for_user(user)
-        res_data = {
-            "access": str(refresh.access_token),
-            "refresh": str(refresh),
-            "role": user.role,
-        }
-        return Response(res_data, status=status.HTTP_201_CREATED, headers=headers)
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
 # TEST CLASSES
 
@@ -349,6 +339,9 @@ def generate_invite(request):
     serializer.is_valid(raise_exception=True)
 
     role = serializer.validated_data.get('role', 'employee')
+    if role not in ('employee', 'manager'):
+        return Response({"detail": "Invalid role"}, status=400)
+
     token      = secrets.token_urlsafe(16)
     expires_at = timezone.now() + timedelta(days=3)
 
@@ -399,13 +392,10 @@ class ShiftViewSet(viewsets.ModelViewSet):
     def get_object(self):
         obj = super().get_object()
         user = cast(User, self.request.user)
-
-        if user.role != 'manager' and obj.employee != user:
-            raise PermissionDenied("You do not have permission to access this shift.")
-
         if user.role == 'manager' and obj.manager != user:
             raise PermissionDenied("You do not manage this shift.")
-
+        if user.role != 'manager' and obj.employee != user:
+            raise PermissionDenied("You do not have permission to access this shift.")
         return obj
 
 @extend_schema(

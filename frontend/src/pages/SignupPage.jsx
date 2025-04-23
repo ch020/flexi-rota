@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api, {setAuthCookies} from "../services/api";
+import api from "../services/api";
 
-const SignupPage = ({ onSignup, invite }) => {
+const SignupPage = ({ invite }) => {
   const [firstName, setFirstName] = useState("");
   const [lastName,  setLastName]  = useState("");
   const [username,  setUsername]  = useState("");
@@ -10,6 +10,7 @@ const SignupPage = ({ onSignup, invite }) => {
   const [password,  setPassword]  = useState("");
   const [confirm,   setConfirm]   = useState("");
   const [error,     setError]     = useState("");
+
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -23,23 +24,22 @@ const SignupPage = ({ onSignup, invite }) => {
       const url = invite
         ? `/api/register/?invite=${invite}`
         : "/api/register/";
-      const res = await api.post(url, {
+
+      await api.post(url, {
         first_name: firstName,
         last_name:  lastName,
-        username,
-        email,
-        password,
+        username: username,
+        email: email,
+        password: password,
         password2: confirm,
         role: "employee"        // backend will override if invite.role==="manager"
       });
-      const { access, refresh } = res.data || {};
-      if (access && refresh) {
-        setAuthCookies(access, refresh);
-        onSignup();
-        navigate("/");
-      }
+
+      alert("Signup successful. You can now log in.");
+      navigate("/sign-in");
     } catch (err) {
-      setError(err.response?.data?.detail || "Registration failed");
+      const detail = err.response?.data?.detail || "Registration failed.";
+      setError(typeof detail === "string" ? detail : JSON.stringify(detail));
     }
   };
 
