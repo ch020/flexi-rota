@@ -15,9 +15,13 @@ from rest_framework import viewsets, generics
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
+from rest_framework.response import Response
+from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.shortcuts import get_object_or_404
 
 from .serializers import *
+from .models import ShiftTemplate, Shift, User, Availability, Notification, NotificationReadStatus
 
 
 @extend_schema(
@@ -88,9 +92,11 @@ class ShiftTemplateViewSet(viewsets.ModelViewSet):
         shift_template = self.get_object()
         ShiftRoleRequirement.objects.filter(shift_template=shift_template).delete()
 
-        serializer = ShiftRoleRequirementSerializer(data=request.data, many=True)
-        serializer.is_valid(raise_exception=True)
+        # support either POST [ {...}, {...} ]  or  { roles: [ {...}, {...} ] }
+        payload = request.data.get('roles') if isinstance(request.data, dict) else request.data
+        serializer = ShiftRoleRequirementSerializer(data=payload or [], many=True)
 
+        serializer.is_valid(raise_exception=True)
         for item in serializer.validated_data:
             ShiftRoleRequirement.objects.create(
                 shift_template=shift_template,
@@ -107,14 +113,17 @@ class ShiftTemplateViewSet(viewsets.ModelViewSet):
     tags=["Users"]
 )
 class UserViewSet(viewsets.ModelViewSet):              # ← allow PATCH
-    queryset = User.objects.none()
+    # base queryset so router can infer basename
+    queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        user = cast(User, self.request.user)
+        user = self.request.user
         if user.role == 'manager':
+            # show everyone in the same organisation
             return User.objects.filter(organisation=user.organisation)
+        # otherwise only yourself
         return User.objects.filter(id=user.id)
 
     def partial_update(self, request, *args, **kwargs):
@@ -137,17 +146,28 @@ class UserViewSet(viewsets.ModelViewSet):              # ← allow PATCH
     tags=["Availabilities"]
 )
 class AvailabilityViewSet(viewsets.ModelViewSet):
+    # base queryset so router can infer `basename="availability"`
+    queryset = Availability.objects.all()
     serializer_class = AvailabilitySerializer
     permission_classes = [IsAuthenticated]
-    queryset = Availability.objects.all()
 
     def get_queryset(self):
-        user = cast(User, self.request.user)
+        now = timezone.now()
+        # 1) delete any expired slots
+        Availability.objects.filter(end_time__lt=now).delete()
 
+        user = self.request.user
+        # 2) managers see everyone’s future/current slots
         if user.role == "manager":
-            return Availability.objects.filter(user__organisation=user.organisation)
-        else:
-            return Availability.objects.filter(user=user)
+            return Availability.objects.filter(
+                user__organisation=user.organisation,
+                end_time__gte=now
+            )
+        # 3) regular users see only their own future/current slots
+        return Availability.objects.filter(
+            user=user,
+            end_time__gte=now
+        )
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -191,6 +211,32 @@ class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
     authentication_classes = []      # ← disable JWT/session auth here
     permission_classes     = [AllowAny]  # ← allow anyone to register
+
+    def create(self, request, *args, **kwargs):
+        invite_token = request.query_params.get("invite")
+        role         = "employee"
+        org          = None
+
+        if invite_token:
+            try:
+                inv = InviteToken.objects.get(token=invite_token, expires_at__gte=timezone.now())
+                role = inv.role            # "manager" or "employee"
+                org  = inv.organisation
+                inv.delete()              # one‐time use
+            except InviteToken.DoesNotExist:
+                return Response({"detail":"Invalid or expired invite."}, status=400)
+
+        # inject role/org into the incoming data
+        data = request.data.copy()
+        data["role"] = role
+        if org:
+            data["organisation"] = org.pk
+
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
 # TEST CLASSES
 
@@ -403,28 +449,33 @@ def get_unread_notifications(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def send_notification(request):
-    if request.user.role != 'manager':
-        return Response({"detail": "Only managers can send notifications."}, status=403)
-
     serializer = SendNotificationSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
-    data = serializer.validated_data
 
-    notification = Notification.objects.create(message=data['message'])
+    roles      = serializer.validated_data.get("roles", [])
+    recipients = serializer.validated_data.get("recipients", [])
+    message    = serializer.validated_data["message"]
 
-    if not data['recipients'] and not data['roles']:
-        users = User.objects.filter(organisation=request.user.organisation)
-    else:
-        users = User.objects.filter(id__in=data['recipients'])
-        role_users = User.objects.filter(role_title__id__in=data['roles'], organisation=request.user.organisation)
-        users |= role_users
-
+    # build a queryset of users by role_title or explicit recipients
+    users = User.objects.none()
+    if roles:
+        users = users | User.objects.filter(role_title__in=roles)
+    if recipients:
+        users = users | User.objects.filter(id__in=recipients)
     users = users.distinct()
 
-    for user in users:
-        NotificationReadStatus.objects.create(notification=notification, user=user)
+    # 1) Create the notification
+    notif = Notification.objects.create(message=message)
 
-    return Response({"detail": "Notification sent."}, status=201)
+    # 2) Manually link each user via the through‑table (and track unread status)
+    for u in users:
+        NotificationReadStatus.objects.create(
+            user=u,
+            notification=notif,
+            read=False
+        )
+
+    return Response({"detail":"Notifications sent"}, status=status.HTTP_201_CREATED)
 
 @extend_schema(
     summary="Mark a specific notification as read",
@@ -1047,3 +1098,33 @@ This endpoint is useful for pre-filling forms or displaying the current user's s
 def current_user(request):
     serializer = UserSerializer(request.user)
     return Response(serializer.data)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def assign_template(request, pk):
+    # only managers
+    if request.user.role != 'manager':
+        return Response({"detail":"Only managers can assign shifts"}, status=403)
+
+    tmpl = get_object_or_404(
+        ShiftTemplate, id=pk, manager=request.user
+    )
+
+    user_id = request.data.get("user_id")
+    if not user_id:
+        return Response({"detail":"user_id required"}, status=400)
+
+    emp = get_object_or_404(
+        User, id=user_id, organisation=request.user.organisation
+    )
+
+    # create real Shift and drop the template
+    shift = Shift.objects.create(
+        employee=emp,
+        manager = request.user,
+        start_time=tmpl.start_time,
+        end_time=tmpl.end_time
+    )
+    tmpl.delete()
+
+    return Response(ShiftSerializer(shift).data)

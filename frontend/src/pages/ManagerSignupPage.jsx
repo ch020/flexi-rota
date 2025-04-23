@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import api from "../services/api";
 
 const ManagerSignupPage = ({ onSignup }) => {
@@ -12,6 +12,8 @@ const ManagerSignupPage = ({ onSignup }) => {
   const [confirm,   setConfirm]   = useState("");
   const [error,     setError]     = useState("");
   const navigate = useNavigate();
+  const { search } = useLocation();
+  const invite = new URLSearchParams(search).get("invite") || "";
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -20,26 +22,25 @@ const ManagerSignupPage = ({ onSignup }) => {
       return;
     }
 
-    try {
-      const res = await api.post("/api/register/", {
-        organisation_name: orgName,
-        role: "manager",            // ← add role back
-        first_name:        firstName,
-        last_name:         lastName,
-        username,
-        email,
-        password,
-        password2:         confirm
-      });
-      const { access, refresh } = res.data;
-      document.cookie = `access=${access}; path=/`;
-      document.cookie = `refresh=${refresh}; path=/`;
+    const payload = {
+      organisation_name: orgName,
+      role: "manager",
+      first_name: firstName,
+      last_name: lastName,
+      username,
+      email,
+      password,
+      password2: confirm
+    };
+    const url = invite
+      ? `/api/register/?invite=${invite}`
+      : "/api/register/";
 
-      onSignup();
-      navigate("/");
+    try {
+      await api.post(url, payload, { withCredentials: true });
+      navigate("/sign-in");
     } catch (err) {
-      console.error("Signup error payload:", err.response?.data);
-      setError(JSON.stringify(err.response?.data));   // show the full error JSON
+      setError(err.response?.data?.detail || "Signup failed");
     }
   };
 
@@ -131,7 +132,7 @@ const ManagerSignupPage = ({ onSignup }) => {
           {error && <p className="text-red-500 text-center">{error}</p>}
 
           <button
-            type="button"
+            type="submit"
             className="w-full p-3 bg-blue-600 hover:bg-blue-700 text-white rounded font-semibold"
           >
             Create Org & Account

@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 import BackButton from '../assets/BackButton'; // Import the BackButton component
+import { useNavigate } from "react-router-dom";
+import NotificationBell from "../assets/NotificationBell";
 
 const EmployeeDashboard = () => {
   const [payData, setPayData] = useState({ current_month: 0, previous_month: 0 });
@@ -8,6 +10,7 @@ const EmployeeDashboard = () => {
   const [error, setError] = useState(null);
   const [pendingSwaps, setPendingSwaps] = useState([]);
   const [newSwap, setNewSwap] = useState({ shift: '', reason: '' });
+  const navigate = useNavigate();
 
   // Fetch Pay Data
   const fetchPayData = async () => {
@@ -129,8 +132,12 @@ const EmployeeDashboard = () => {
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col items-center justify-center bg-black text-white overflow-hidden">
+    <div className="relative h-screen w-screen flex flex-col items-center bg-black text-white p-6 overflow-auto">
       <BackButton /> {/* Add the BackButton component */}
+      {/* Bell */}
+      <div className="absolute top-4 right-6">
+        <NotificationBell />
+      </div>
       <h1 className="text-3xl font-bold mb-8">Employee Dashboard</h1>
 
       {/* Pay Summary */}

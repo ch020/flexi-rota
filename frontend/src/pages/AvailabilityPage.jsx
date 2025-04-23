@@ -4,6 +4,7 @@ import "react-calendar/dist/Calendar.css";
 import "../index.css";            // your global overrides
 import "../assets/Calendar.css";  // custom-calendar styles to match MainMenu
 import api from "../services/api";
+import NotificationBell from "../assets/NotificationBell";
 import BackButton from "../assets/BackButton";  // ← import same component
 
 export default function AvailabilityPage() {
@@ -14,9 +15,19 @@ export default function AvailabilityPage() {
 
   // 1) load existing availability
   useEffect(() => {
-    api.get("/api/availability/")
-       .then(res => setSlots(res.data))
-       .catch(console.error);
+    api.get("/api/availability/", { withCredentials: true })
+      .then(async res => {
+        const now = new Date();
+        // 1) delete expired
+        await Promise.all(
+          res.data
+            .filter(s => new Date(s.end_time) < now)
+            .map(s => api.delete(`/api/availability/${s.id}/`, { withCredentials: true }))
+        );
+        // 2) keep only future/current slots
+        setSlots(res.data.filter(s => new Date(s.end_time) >= now));
+      })
+      .catch(console.error);
   }, []);
 
   // 2) highlight dates that already have slots
@@ -24,7 +35,7 @@ export default function AvailabilityPage() {
     if (view === "month") {
       const day = date.toISOString().split("T")[0];
       return slots.some(s => s.start_time.startsWith(day))
-        ? "bg-green-600 text-white rounded"
+        ? "bg-red-600 text-white rounded"
         : null;
     }
     return null;
@@ -79,9 +90,13 @@ export default function AvailabilityPage() {
   };
 
   return (
-    <div className="relative h-screen w-screen flex flex-col items-center justify-start bg-black text-white p-6">
+    <div className="relative h-screen w-screen flex flex-col items-center justify-start bg-black text-white p-6 overflow-auto">
+      {/* Bell in top‑right */}
+      <div className="absolute top-4 right-6">
+        <NotificationBell />
+      </div>
       <BackButton />  {/* ← same back button as in EmployeeDashboard */}
-      <h1 className="text-3xl font-bold mb-4">Set Your Availability</h1>
+      <h1 className="text-3xl font-bold mb-4">Set Your Unavailability</h1>
       <Calendar
         onClickDay={handleDayClick}
         tileClassName={tileClassName}
@@ -91,7 +106,7 @@ export default function AvailabilityPage() {
       {selectedDate && (
         <div className="bg-gray-900 p-6 rounded-xl w-full max-w-md mb-6">
           <h2 className="text-xl font-semibold mb-4">
-            Availability for {selectedDate.toLocaleDateString()}
+            Unavailability for {selectedDate.toLocaleDateString()}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -124,9 +139,9 @@ export default function AvailabilityPage() {
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded"
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded"
               >
-                Save
+                Save Unavailability
               </button>
             </div>
           </form>

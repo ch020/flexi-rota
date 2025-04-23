@@ -33,7 +33,9 @@ const useEmployeeAvailability = () => {
         const users = uRes.data;   // [{id, username, first_name, last_name, role},…]
         const slots = aRes.data;   // [{id, user, start_time, end_time},…]
 
-        setRawSlots(slots);
+        const now = new Date();
+        const future = slots.filter(s => new Date(s.end_time) >= now);
+        setRawSlots(future);
 
         // build a per‑user map
         const map = {};
@@ -48,7 +50,7 @@ const useEmployeeAvailability = () => {
           };
         });
 
-        slots.forEach(s => {
+        future.forEach(s => {
           const dt = new Date(s.start_time);
           const day = dt.toLocaleDateString("en-GB", { weekday: "long" });
           const t   = dt.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
@@ -162,13 +164,17 @@ const ManageRolesView = () => {
 
 // 5) Invite View (Employee vs Manager)
 const InviteView = () => {
-  const [inviteUrl, setInviteUrl] = useState("");
+  const [employeeUrl, setEmployeeUrl] = useState("");
+  const [managerUrl, setManagerUrl]   = useState("");
 
-  const generate = async () => {
+  const generateInvite = async (role, setter) => {
     try {
-      // make sure your api.js has withCredentials: true
-      const { data } = await api.get("/api/generate-invite/");
-      setInviteUrl(data.invite_url);
+      const { data } = await api.post(
+        "/api/generate-invite/",
+        { role },
+        { withCredentials: true }
+      );
+      setter(data.invite_url);
     } catch (err) {
       console.error("Invite error:", err.response?.data || err);
       alert(err.response?.data?.detail || "Could not generate invite");
@@ -177,16 +183,33 @@ const InviteView = () => {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-2xl font-semibold text-white">Get Employee Invite</h2>
-      <button
-        onClick={generate}
-        className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-500"
-      >
-        Get Invite Link
-      </button>
-      {inviteUrl && (
-        <div className="mt-2 break-all text-blue-400">
-          <a href={inviteUrl}>{inviteUrl}</a>
+      <h2 className="text-2xl font-semibold text-white">Get Invite Links</h2>
+
+      <div className="flex space-x-2">
+        <button
+          onClick={() => generateInvite("employee", setEmployeeUrl)}
+          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-500"
+        >
+          Employee Invite
+        </button>
+        <button
+          onClick={() => generateInvite("manager", setManagerUrl)}
+          className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-500"
+        >
+          Manager Invite
+        </button>
+      </div>
+
+      {employeeUrl && (
+        <div className="break-all text-blue-400">
+          <strong>Employee link:</strong>{" "}
+          <a href={employeeUrl}>{employeeUrl}</a>
+        </div>
+      )}
+      {managerUrl && (
+        <div className="break-all text-blue-400">
+          <strong>Manager link:</strong>{" "}
+          <a href={managerUrl}>{managerUrl}</a>
         </div>
       )}
     </div>
@@ -262,41 +285,99 @@ const FairnessAnalyticsView = () => {
 }
 // 6) Create & Assign Shifts View
 const AssignShiftsView = () => {
-  const [start, setStart]     = useState("");
-  const [end,   setEnd]       = useState("");
-  const [createMsg, setCreateMsg]   = useState("");
-  const [assignMsg, setAssignMsg]   = useState("");
+  const [start, setStart]            = useState("");
+  const [end, setEnd]                = useState("");
+  const [roles, setRoles]            = useState([]);
+  const [reqs, setReqs]              = useState([{ role: "", count: 1 }]);
+  const [templates, setTmpls]        = useState([]);
+  const [users, setUsers]            = useState([]);
+  const [createMsg, setCreateMsg]    = useState("");
+  const [assignMsg, setAssignMsg]    = useState("");
+  const [selectedAssignee, setSelectedAssignee] = useState({});
 
-  // 1) Create the shift template
+  // fetch unassigned templates & employee list
+  const refreshData = () => {
+    api.get("/api/shift-templates/").then(r => setTmpls(r.data));
+    api.get("/api/users/").then(r => setUsers(r.data));
+  };
+  useEffect(refreshData, [createMsg, assignMsg]);
+
+  // fetch roles for requirement picks
+  useEffect(() => {
+    api.get("/api/roles/").then(r => setRoles(r.data));
+  }, []);
+
+  const handleAddReq = () => {
+    setReqs(rs => [...rs, { role: "", count: 1 }]);
+  };
+  const handleReqChange = (i, field, val) => {
+    setReqs(rs => {
+      const copy = [...rs];
+      copy[i][field] = val;
+      return copy;
+    });
+  };
+  const handleRemoveReq = i => {
+    setReqs(rs => rs.filter((_, idx) => idx !== i));
+  };
+
+  // create template + role‐requirements
   const handleCreate = async e => {
     e.preventDefault();
     try {
-      await api.post("/api/shift-templates/", {
+      const { data } = await api.post("/api/shift-templates/", {
         start_time: new Date(start).toISOString(),
         end_time:   new Date(end).toISOString(),
       });
-      setCreateMsg("Shift template created.");
+      const tmplId = data.id;
+
+      // POST your requirements
+      await api.post(
+        `/api/shift-templates/${tmplId}/set-roles/`,
+        { roles: reqs.filter(r => r.role).map(r => ({ role: r.role, count: r.count })) }
+      );
+
+      setCreateMsg("Template + requirements created.");
+      setStart(""); setEnd(""); setReqs([{role:"",count:1}]);
     } catch (err) {
-      console.error(err);
-      setCreateMsg(err.response?.data?.detail || "Failed to create shift.");
+      setCreateMsg(err.response?.data?.detail || "Create failed");
     }
   };
 
-  // 2) Auto‑assign all pending templates
-  const handleAssign = async () => {
+  // auto‑assign all
+  const handleAutoAssign = async () => {
     try {
       const { data } = await api.post("/api/auto-assign-shifts/");
       setAssignMsg(data.detail);
     } catch (err) {
+      setAssignMsg(err.response?.data?.detail || "Auto‑assign failed");
+    }
+  };
+
+  // when you choose an employee from the dropdown
+  const handleSelectionChange = (tmplId, userId) => {
+    setSelectedAssignee(prev => ({ ...prev, [tmplId]: userId }));
+  };
+
+  // manual assign one template to one user
+  const handleManualAssign = async (tmplId, userId) => {
+    try {
+      await api.post(
+        `/api/shift-templates/${tmplId}/assign/`,
+        { user_id: userId },
+        { withCredentials: true }
+      );
+      refreshData();
+    } catch (err) {
       console.error(err);
-      setAssignMsg(err.response?.data?.detail || "Assignment failed.");
+      alert(err.response?.data?.detail || "Assignment failed");
     }
   };
 
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-semibold text-white">Create Shift Template</h2>
-      <form onSubmit={handleCreate} className="space-y-2">
+      <form onSubmit={handleCreate} className="space-y-4">
         <div>
           <label className="block text-white">Start</label>
           <input
@@ -317,6 +398,48 @@ const AssignShiftsView = () => {
             required
           />
         </div>
+
+        <div>
+          <label className="block text-white mb-2">Role Requirements</label>
+          {reqs.map((r, i) => (
+            <div key={i} className="flex space-x-2 items-center mb-2">
+              <select
+                value={r.role}
+                onChange={e => handleReqChange(i, "role", parseInt(e.target.value,10))}
+                className="flex-1 p-2 bg-gray-700 text-white rounded"
+                required
+              >
+                <option value="">Select role…</option>
+                {roles.map(role => (
+                  <option key={role.id} value={role.id}>{role.name}</option>
+                ))}
+              </select>
+              <input
+                type="number"
+                min="1"
+                value={r.count}
+                onChange={e => handleReqChange(i, "count", parseInt(e.target.value,10))}
+                className="w-20 p-2 bg-gray-700 text-white rounded text-center"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => handleRemoveReq(i)}
+                className="text-red-500 hover:text-red-400"
+              >
+                &times;
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={handleAddReq}
+            className="px-3 py-1 bg-green-600 hover:bg-green-500 text-white rounded"
+          >
+            + Add Role
+          </button>
+        </div>
+
         <button
           type="submit"
           className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded"
@@ -326,10 +449,54 @@ const AssignShiftsView = () => {
         {createMsg && <p className="text-white">{createMsg}</p>}
       </form>
 
+      {/* Manual Assignment */}
+      <div className="pt-6 border-t border-gray-700">
+        <h2 className="text-2xl font-semibold text-white">Manual Assignment</h2>
+        <ul className="space-y-4">
+          {templates.map(t => (
+            <li key={t.id} className="bg-gray-800 p-4 rounded">
+              <div className="text-white mb-2">
+                {new Date(t.start_time).toLocaleString()} –{" "}
+                {new Date(t.end_time).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}
+              </div>
+              <div className="flex space-x-2 items-center">
+                <select
+                  value={selectedAssignee[t.id] || ""}
+                  onChange={e =>
+                    handleSelectionChange(t.id, parseInt(e.target.value, 10))
+                  }
+                  className="flex-1 p-2 bg-gray-700 text-white rounded"
+                >
+                  <option value="">Select employee…</option>
+                  {users.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.full_name || u.username}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() =>
+                    handleManualAssign(t.id, selectedAssignee[t.id])
+                  }
+                  disabled={!selectedAssignee[t.id]}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded disabled:opacity-50"
+                >
+                  Assign
+                </button>
+              </div>
+            </li>
+          ))}
+          {templates.length === 0 && (
+            <p className="text-gray-400">No unassigned templates.</p>
+          )}
+        </ul>
+      </div>
+
+      {/* Auto‑Assign Shifts */}
       <div className="pt-6 border-t border-gray-700">
         <h2 className="text-2xl font-semibold text-white">Auto‑Assign Shifts</h2>
         <button
-          onClick={handleAssign}
+          onClick={handleAutoAssign}
           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
         >
           Assign All Pending
@@ -340,11 +507,132 @@ const AssignShiftsView = () => {
   );
 };
 
+// –––––– Notification Popup ––––––
+const NotificationsPopup = ({ onClose }) => {
+  const [notes, setNotes]     = useState([]);
+
+  useEffect(() => {
+    api.get("/api/notifications/", { withCredentials: true })
+      .then(r => setNotes(r.data))
+      .catch(console.error);
+  }, []);
+
+  const markRead = async id => {
+    try {
+      await api.post(`/api/notifications/${id}/read/`, {}, { withCredentials: true });
+      setNotes(ns => ns.filter(n => n.id !== id));
+    } catch (e) { console.error(e); }
+  };
+
+  return (
+    <div className="absolute right-0 mt-2 w-80 bg-gray-800 text-white rounded shadow-lg z-50">
+      <div className="p-2 border-b border-gray-700 flex justify-between">
+        <span>Notifications</span>
+        <button onClick={onClose} className="text-gray-400 hover:text-white">✕</button>
+      </div>
+      {notes.length === 0 
+        ? <div className="p-4 text-gray-400">No unread</div>
+        : notes.map(n => (
+            <div key={n.id} className="p-3 border-b border-gray-700">
+              <p className="text-sm">{n.message}</p>
+              <button
+                onClick={() => markRead(n.id)}
+                className="text-xs text-blue-400 hover:underline mt-1"
+              >Mark read</button>
+            </div>
+          ))
+      }
+    </div>
+  );
+};
+
+// –––––– Manager “Send Notification” Tab ––––––
+const NotificationsView = () => {
+  const [roles, setRoles]     = useState([]);
+  const [selRole, setSelRole] = useState("");
+  const [msg, setMsg]         = useState("");
+  const [feedback, setFeedback] = useState("");
+
+  useEffect(() => {
+    api.get("/api/roles/", { withCredentials: true })
+      .then(r => setRoles(r.data))
+      .catch(console.error);
+  }, []);
+
+  const send = async () => {
+    if (!selRole || !msg.trim())
+      return alert("Select a role and enter a message");
+
+    try {
+      // build the exact payload your DRF serializer expects:
+      const payload = {
+        roles:      [parseInt(selRole, 10)],
+        recipients: [],          // empty because you’re targeting by role
+        message:    msg
+      };
+
+      const response = await api.post(
+        "/api/notifications/send/",
+        payload,
+        { withCredentials: true }
+      );
+      console.log("Notification send response:", response);
+      setFeedback("Sent!");
+      setMsg("");
+      setSelRole("");
+    } catch (err) {
+      // log full response so you see status + body
+      console.error("Notification send failed:", err.response);
+      const body = err.response?.data;
+      setFeedback(
+        body?.detail 
+          || JSON.stringify(body) 
+          || err.message
+      );
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-2xl font-semibold text-white">Send Notification</h2>
+      <select
+        value={selRole}
+        onChange={e => setSelRole(e.target.value)}
+        className="w-full p-2 bg-gray-700 text-white rounded"
+      >
+        <option value="">Select role…</option>
+        {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+      </select>
+      <textarea
+        rows={3}
+        value={msg}
+        onChange={e => setMsg(e.target.value)}
+        className="w-full p-2 bg-gray-700 text-white rounded"
+        placeholder="Your message…"
+      />
+      <button
+        onClick={send}
+        className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded"
+      >Send</button>
+      {feedback && <p className="text-white">{feedback}</p>}
+    </div>
+  );
+};
+
 export default function ManagerRecapPage() {
   const navigate = useNavigate();
   const { availabilityData, rawSlots, loading } = useEmployeeAvailability();
   const [view, setView]           = useState("day");
   const [selectedDate, setSelectedDate] = useState(null);
+  // notifications badge & popup
+  const [unread, setUnread] = useState(0);
+  const [showNotif, setShowNotif] = useState(false);
+
+  useEffect(() => {
+    api.get("/api/notifications/", { withCredentials: true })
+       .then(r => setUnread(r.data.length))
+       .catch(console.error);
+  }, []);
 
   // handler passed to the Calendar
   const onDayClick = (date) => {
@@ -363,8 +651,8 @@ export default function ManagerRecapPage() {
       // quick guard
       if (!selectedDate || s.user !== emp.id) return false;
       // compare the first 10 chars of the ISO string (YYYY-MM-DD)
-      const slotDate = s.start_time.slice(0, 10);
-      return slotDate === selectedDate;
+      const slotDay = new Date(s.start_time).toISOString().slice(0,10);
+      return slotDay === selectedDate;
     });
 
 
@@ -380,8 +668,23 @@ export default function ManagerRecapPage() {
   }
 
   return (
-    <div className="h-screen w-screen flex flex-col items-center bg-black text-white p-6 overflow-auto">
+    <div className="relative h-screen w-screen flex flex-col items-center bg-black text-white p-6 overflow-auto">
       <div className="w-full max-w-3xl">
+        {/* Bell button */}
+        <div className="absolute top-4 right-6">
+          <button
+            onClick={() => setShowNotif(v => !v)}
+            className="relative text-2xl"
+          >
+            🔔
+            {unread > 0 && (
+              <span className="absolute -top-1 -right-2 bg-red-600 text-xs w-5 h-5 rounded-full flex items-center justify-center">
+                {unread}
+              </span>
+            )}
+          </button>
+          {showNotif && <NotificationsPopup onClose={() => setShowNotif(false)} />}
+        </div>
         <div 
           onClick={() => navigate(-1)} 
           className="mb-4 inline-block cursor-pointer"
@@ -391,7 +694,7 @@ export default function ManagerRecapPage() {
         <h1 className="text-3xl font-bold mb-6">Manager Dashboard</h1>
 
         <div className="flex space-x-4 mb-6">
-          {["day","roles","invite","assign", "fairness"].map(v => (
+          {["day","roles","invite","assign","notifications","fairness"].map(v => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -404,7 +707,8 @@ export default function ManagerRecapPage() {
               {v==="day"     ? "By Day"
               : v==="roles"   ? "Manage Roles"
               : v==="invite"  ? "Invite"
-              : v==="assign" ?  "Assign Shifts"
+              : v==="assign"       ? "Assign Shifts"
+              : v==="notifications"? "Notifications"
               : "Fairness Analytics"}
             </button>
           ))}
@@ -423,25 +727,24 @@ export default function ManagerRecapPage() {
             {selectedDate && (
               <ul className="mt-6 space-y-3">
                 {availabilityByDate.map(u => (
-                  <li
-                    key={u.id}
-                    className="bg-gray-800 p-4 rounded text-white"
-                  >
+                  <li key={u.id} className="bg-gray-800 p-4 rounded text-white">
                     <div className="font-semibold">{u.name}</div>
                     {u.slots.length > 0 ? (
                       <ul className="ml-4 list-disc">
                         {u.slots.map(s => {
-                          const start = new Date(s.start_time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-                          const end   = new Date(s.end_time).toLocaleTimeString([],   {hour:'2-digit', minute:'2-digit'});
+                          const start = new Date(s.start_time)
+                            .toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+                          const end = new Date(s.end_time)
+                            .toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
                           return (
-                            <li key={s.id} className="text-green-400">
+                            <li key={s.id} className="text-red-400">
                               {start} – {end}
                             </li>
                           );
                         })}
                       </ul>
                     ) : (
-                      <div className="text-red-400">Unavailable</div>
+                      <div className="text-green-400">Available</div>
                     )}
                   </li>
                 ))}
@@ -452,11 +755,13 @@ export default function ManagerRecapPage() {
 
         {view === "roles" && <ManageRolesView />}
 
-        {view === "invite" && <InviteView />}
+        {view === "invite"         && <InviteView />}
 
-        {view === "assign" && <AssignShiftsView />}
+        {view === "assign"         && <AssignShiftsView />}
 
-        {view === "fairness" && <FairnessAnalyticsView />}
+        {view === "notifications"  && <NotificationsView />}
+
+        {view === "fairness"       && <FairnessAnalyticsView />}
       </div>
     </div>
   );
