@@ -209,23 +209,27 @@ class RegisterView(generics.CreateAPIView):
 
     def create(self, request, *args, **kwargs):
         invite_token = request.query_params.get("invite")
-        role = "employee"
-        org = None
+        data = request.data.copy()
 
         if invite_token:
             try:
                 inv = InviteToken.objects.get(token=invite_token, expires_at__gte=timezone.now())
-                role = inv.role            # "manager" or "employee"
-                org  = inv.organisation
+                data["organisation"] = inv.organisation.pk
+                data["role"] = inv.role
                 inv.delete()              # one‐time use
             except InviteToken.DoesNotExist:
                 return Response({"detail":"Invalid or expired invite."}, status=400)
+        else:
+            if data.get("role") != "manager":
+                return Response({"invite": "Only managers may sign up without an invite link."}, status=400)
 
-        # inject role/org into the incoming data
-        data = request.data.copy()
-        if org:
+            org_name = data.get("organisation_name")
+            if not org_name:
+                return Response({"organisation_name": "This field is required."}, status=400)
+
+            org = Organisation.objects.create(name=org_name)
             data["organisation"] = org.pk
-            data["role"] = role
+            data["role"] = "manager"
 
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
@@ -351,7 +355,7 @@ def generate_invite(request):
         token=token,
         expires_at=expires_at,
     )
-    invite_url = settings.FRONTEND_SIGNUP_URL + "?invite={token}"
+    invite_url = settings.FRONTEND_SIGNUP_URL + f"?invite={token}"
     return Response({"invite_url": invite_url}, status=201)
 
 #SHIFT CLASSES

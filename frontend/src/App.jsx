@@ -89,8 +89,10 @@ function App() {
               isLoggedIn
                 ? (userRole === "manager"
                   ? <ManagerMenu onLogout={handleLogout} />
-                  : <MainMenu onLogout={handleLogout} />)
-                : <Navigate to="/sign-up" replace />
+                  : userRole === "employee"
+                  ? <MainMenu onLogout={handleLogout} />
+                  : <Navigate to="/sign-in" replace />)
+                : <Navigate to="/sign-in" replace />
             }
           />
 
