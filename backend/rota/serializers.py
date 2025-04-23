@@ -99,14 +99,14 @@ class RegisterSerializer(serializers.ModelSerializer):
                     token=invite_token,
                     expires_at__gt=timezone.now()
                 )
+                # apply invite’s organisation & role
+                user.organisation = inv.organisation
+                user.role         = inv.role
+                inv.delete()
             except InviteToken.DoesNotExist:
                 raise serializers.ValidationError({
                     'invite': "Invalid or expired invite link."
                 })
-            # apply invite’s organisation & role
-            user.organisation = inv.organisation
-            user.role         = inv.role
-            inv.delete()
         else:
             # no invite → only allow manager self‑sign‑up
             if user.role != 'manager':
