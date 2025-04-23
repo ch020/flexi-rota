@@ -51,6 +51,7 @@ urlpatterns = [
     path('testnoauth/', test_api_noauth),
     path('testauth/', test_api_auth),
 
+    path("check-org-availability/", check_org_availability, name="check-org-availability"),
     # ROUTER
     path('', include(router.urls)),
 ]

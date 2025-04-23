@@ -55,6 +55,11 @@ class RegisterSerializer(serializers.ModelSerializer):
         write_only=True,
         required=True
     )
+    organisation_name = serializers.CharField(
+        required=False,
+        write_only=True,
+        help_text="Required if registering as a manager without an invite"
+    )
 
     class Meta:
         model = User
@@ -67,7 +72,8 @@ class RegisterSerializer(serializers.ModelSerializer):
             'last_name',
             'phone_number',
             'pay_rate',
-            'role',           # Will be set from invite if present
+            'role',
+            'organisation_name' # Will be set from invite if present
         )
         extra_kwargs = {
             'role': {'read_only': True}
@@ -88,6 +94,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         # drop password2, extract password
         validated_data.pop('password2')
         raw_password = validated_data.pop('password')
+        org_name = validated_data.pop('organisation_name', None)
 
         # build user instance without saving
         user = User(**validated_data)
@@ -113,6 +120,13 @@ class RegisterSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     'invite': "Only managers may sign up without an invite link."
                 })
+            if not org_name:
+                raise serializers.ValidationError({
+                    'organisation_name': "Organisation name is required for manager sign-up."
+                })
+
+            user.organisation = Organisation.objects.create(name=org_name)
+            user.role = 'manager'
 
         # set & hash password, then save
         user.set_password(raw_password)

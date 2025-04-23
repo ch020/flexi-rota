@@ -1,9 +1,11 @@
-import React, { useState } from "react";
+import React, {useEffect, useState} from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import api from "../services/api";
 
 const ManagerSignupPage = () => {
   const [orgName,   setOrgName]   = useState("");
+  const [orgAvailable, setOrgAvailable] = useState(null);
+  const [checkingOrg, setCheckingOrg] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [lastName,  setLastName]  = useState("");
   const [username,  setUsername]  = useState("");
@@ -15,6 +17,26 @@ const ManagerSignupPage = () => {
   const navigate = useNavigate();
   const invite = new URLSearchParams(useLocation().search).get("invite") || "";
 
+  useEffect(() => {
+    if (!orgName.trim()){
+      setOrgAvailable(null);
+      return;
+    }
+
+    const timeout = setTimeout(async () => {
+    setCheckingOrg(true);
+    try {
+      const res = await api.get(`/api/check-org-availability/?name=${encodeURIComponent(orgName)}`);
+      setOrgAvailable(res.data.available);
+    } catch {
+      setOrgAvailable(false);
+    } finally {
+      setCheckingOrg(false);
+    }
+  }, 600);
+    return () => clearTimeout(timeout);
+  }, [orgName]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -23,21 +45,20 @@ const ManagerSignupPage = () => {
       return;
     }
 
-    const payload = {
-      organisation_name: orgName,
-      role: "manager",
-      first_name: firstName,
-      last_name: lastName,
-      usename: username,
-      email: email,
-      password: password,
-      password2: confirm
-    };
-    const url = invite
-      ? `/api/register/?invite=${invite}`
-      : "/api/register/";
-
     try {
+      const payload = {
+        organisation_name: orgName,
+        role: "manager",
+        first_name: firstName,
+        last_name: lastName,
+        username: username,
+        email: email,
+        password: password,
+        password2: confirm
+      };
+      const url = invite
+        ? `/api/register/?invite=${invite}`
+        : "/api/register/";
       await api.post(url, payload);
       alert("Signup successful. You can now log in.");
       navigate("/sign-in");
@@ -54,37 +75,53 @@ const ManagerSignupPage = () => {
           Create Organisation & Manager Account
         </h1>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block mb-1">Organisation Name</label>
+            <input
+              type="text"
+              value={orgName}
+              onChange={(e) => setOrgName(e.target.value)}
+              className="w-full p-3 bg-black border border-gray-700 rounded text-white"
+              required
+            />
+            {checkingOrg && (
+              <p className="text-gray-400 text-sm">Checking availability...</p>
+            )}
+            {orgAvailable === false && (
+              <p className="text-red-400 text-sm">Organisation name is taken.</p>
+            )}
+            {orgAvailable === true && (
+              <p className="text-green-400 text-sm">Organisation name is available!</p>
+            )}
+          </div>
 
-          {[
-            { label: "Organisation Name", value: orgName, set: setOrgName },
-            { label: "First Name", value: firstName, set: setFirstName },
-            { label: "Last Name", value: lastName, set: setLastName },
-            { label: "Username", value: username, set: setUsername },
-            { label: "Email", value: email, set: setEmail, type: "email" },
-            { label: "Password", value: password, set: setPassword, type: "password" },
-            { label: "Confirm Password", value: confirm, set: setConfirm, type: "password" },
-          ].map(({ label, value, set, type = "text" }) => (
-            <div key={label}>
-              <label className="block mb-1">{label}</label>
-              <input
-                type={type}
-                value={value}
-                onChange={(e) => set(e.target.value)}
-                className="w-full p-3 bg-black border border-gray-700 rounded text-white"
-                required
-              />
-            </div>
-          ))}
+          {[["First Name", firstName, setFirstName], ["Last Name", lastName, setLastName],
+            ["Username", username, setUsername], ["Email", email, setEmail, "email"],
+            ["Password", password, setPassword, "password"], ["Confirm Password", confirm, setConfirm, "password"]]
+            .map(([label, value, set, type = "text"]) => (
+              <div key={label}>
+                <label className="block mb-1">{label}</label>
+                <input
+                  type={type}
+                  value={value}
+                  onChange={(e) => set(e.target.value)}
+                  className="w-full p-3 bg-black border border-gray-700 rounded text-white"
+                  required
+                />
+              </div>
+            ))}
 
           {error && <p className="text-red-500 text-center">{error}</p>}
 
           <button
             type="submit"
             className="w-full p-3 bg-blue-600 hover:bg-blue-700 text-white rounded font-semibold"
+            disabled={!orgAvailable}
           >
             Sign Up
           </button>
         </form>
+
         <p className="mt-4 text-center text-sm">
           Already have an account?{" "}
           <button

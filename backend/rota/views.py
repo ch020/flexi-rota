@@ -209,8 +209,8 @@ class RegisterView(generics.CreateAPIView):
 
     def create(self, request, *args, **kwargs):
         invite_token = request.query_params.get("invite")
-        role         = "employee"
-        org          = None
+        role = "employee"
+        org = None
 
         if invite_token:
             try:
@@ -230,8 +230,8 @@ class RegisterView(generics.CreateAPIView):
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        headers = self.get_success_headers(serializer.data)
 
+        headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
 # TEST CLASSES
@@ -1124,3 +1124,13 @@ def assign_template(request, pk):
     tmpl.delete()
 
     return Response(ShiftSerializer(shift).data)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def check_org_availability(request):
+    name = request.GET.get('name', "").strip()
+    if not name:
+        return Response({"available": False}, status=400)
+
+    exists = Organisation.objects.filter(name__iexact=name).exists()
+    return Response({"available": not exists})
