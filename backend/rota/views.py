@@ -351,7 +351,7 @@ def generate_invite(request):
         token=token,
         expires_at=expires_at,
     )
-    invite_url = settings.BACKEND_URL + f"api/register/?invite={token}"
+    invite_url = settings.FRONTEND_SIGNUP_URL + "?invite={token}"
     return Response({"invite_url": invite_url}, status=201)
 
 #SHIFT CLASSES

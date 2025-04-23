@@ -170,7 +170,7 @@ SPECTACULAR_SETTINGS = {
 
 AUTH_USER_MODEL = 'rota.User'
 
-BACKEND_URL = os.getenv('BACKEND_URL', 'http://localhost:8000/')  # NEEDS TO BE SET IN .ENV FILE IN backend/
+FRONTEND_SIGNUP_URL = os.getenv('FRONTEND_SIGNUP_URL', 'http://localhost:5173/sign-up')  # NEEDS TO BE SET IN .ENV FILE IN backend/
 
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
