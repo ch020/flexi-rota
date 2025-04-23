@@ -99,7 +99,7 @@ const MainMenu = ({ onLogout }) => {
             onClick={() => navigate("/availability")}
             className="bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-semibold transition"
           >
-            Set Availability
+            Set Unavailability
           </button>
 
           <button

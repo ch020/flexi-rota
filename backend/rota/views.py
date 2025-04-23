@@ -177,7 +177,21 @@ class AvailabilityViewSet(viewsets.ModelViewSet):
 
 @extend_schema(
     summary="Register a new user",
-    description="Registers a new user account. If an invite token is present in the query string, links the user to an organisation.",
+    description="""
+    Registers a new user account. There are two distinct signup flows:
+
+    ### 1. With an invite token:
+    - The invite token must be passed as a query parameter (e.g. `?invite=abc123`)
+    - The `role` and `organisation` are automatically assigned based on the invite
+    - Required fields: `username`, `email`, `password`, `password2`, `first_name`, `last_name`
+
+    ### 2. Without an invite (Managers Only):
+    - Only users registering as managers can sign up without an invite
+    - The field `organisation_name` must be provided and a new organisation will be created
+    - Required fields: `username`, `email`, `password`, `password2`, `first_name`, `last_name`, `organisation_name`
+
+    Note: The `role` field is **not required** and will be ignored if included — the backend sets this automatically.
+    """,
     request=RegisterSerializer,
     responses={
         201: UserSerializer,
@@ -185,18 +199,29 @@ class AvailabilityViewSet(viewsets.ModelViewSet):
     },
     examples=[
         OpenApiExample(
-            "Register as Employee",
+            name="Manager Signup (No Invite)",
             value={
-                "username": "testuser",
-                "email": "test@example.com",
-                "password": "strongpassword123",
-                "password2": "strongpassword123",
-                "role": "employee",
-                "first_name": "Test",
-                "last_name": "User",
-                "phone_number": "+447123456789",
-                "pay_rate": "10.50"
-            }
+                "username": "manager001",
+                "email": "manager@example.com",
+                "password": "StrongPass123",
+                "password2": "StrongPass123",
+                "first_name": "Alice",
+                "last_name": "Smith",
+                "organisation_name": "SuperOrg"
+            },
+            request_only=True
+        ),
+        OpenApiExample(
+            name="Employee Signup (Via Invite)",
+            value={
+                "username": "employee002",
+                "email": "employee@example.com",
+                "password": "StrongPass123",
+                "password2": "StrongPass123",
+                "first_name": "Bob",
+                "last_name": "Johnson"
+            },
+            request_only=True
         )
     ],
     tags=["Users"]
@@ -233,7 +258,7 @@ class RegisterView(generics.CreateAPIView):
 
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        user = serializer.save()
 
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
