@@ -4,6 +4,8 @@
 
 **FlexiRota** is a smart shift and availability management app designed for teams. It enables employees to set their unavailability and allows managers to view and manage team rotas efficiently.
 
+🔗 [Neil and Bhagy: View our video here!](https://drive.google.com/file/d/1NZT1UEh23-iVcsCsFGE3YXCG66d3lKYP/view?usp=drive_link)
+https://drive.google.com/file/d/1NZT1UEh23-iVcsCsFGE3YXCG66d3lKYP/view?usp=drive_link
 ---
 
 ## 🌐 Live Frontend
