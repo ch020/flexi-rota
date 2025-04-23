@@ -73,11 +73,10 @@ class RegisterSerializer(serializers.ModelSerializer):
             'phone_number',
             'pay_rate',
             'role',
-            'organisation' # Will be set from invite if present
+            'organisation_name' # Will be set from invite if present
         )
         extra_kwargs = {
-            'role': {'read_only': True},
-            'organisation': {'read_only': True}
+            'role': {'read_only': True}
         }
 
     def validate(self, attrs):
@@ -88,10 +87,48 @@ class RegisterSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
+        # pull invite token from URL
+        request = self.context['request']
+        invite_token = request.query_params.get('invite')
+
+        # drop password2, extract password
         validated_data.pop('password2')
         raw_password = validated_data.pop('password')
+        org_name = validated_data.pop('organisation_name', None)
 
+        # build user instance without saving
         user = User(**validated_data)
+
+        if invite_token:
+            # one‑time invite: fetch and consume
+            try:
+                inv = InviteToken.objects.get(
+                    token=invite_token,
+                    expires_at__gt=timezone.now()
+                )
+                # apply invite’s organisation & role
+                user.organisation = inv.organisation
+                user.role         = inv.role
+                inv.delete()
+            except InviteToken.DoesNotExist:
+                raise serializers.ValidationError({
+                    'invite': "Invalid or expired invite link."
+                })
+        else:
+            # no invite → only allow manager self‑sign‑up
+            if user.role != 'manager':
+                raise serializers.ValidationError({
+                    'invite': "Only managers may sign up without an invite link."
+                })
+            if not org_name:
+                raise serializers.ValidationError({
+                    'organisation_name': "Organisation name is required for manager sign-up."
+                })
+
+            user.organisation = Organisation.objects.create(name=org_name)
+            user.role = 'manager'
+
+        # set & hash password, then save
         user.set_password(raw_password)
         user.save()
         return user
